@@ -1,0 +1,75 @@
+name: SkyBound EFB — Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── macOS: .dmg (Intel + Apple Silicon universal) ─────────────────────────
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install deps
+        run: npm ci
+        working-directory: desktop
+      - name: Build universal .dmg
+        run: npm run dist:mac
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload .dmg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkyBound-mac-dmg
+          path: desktop/release/*.dmg
+
+  # ── Windows: .exe installer ───────────────────────────────────────────────
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install deps
+        run: npm ci
+        working-directory: desktop
+      - name: Build .exe
+        run: npm run dist:win
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload .exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkyBound-win-exe
+          path: desktop/release/*.exe
+
+  # ── GitHub Release (csak tag-re) ──────────────────────────────────────────
+  release:
+    needs: [build-mac, build-win]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

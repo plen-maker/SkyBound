@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/
+.env
+serviceAccount.json
+*.plist
+google-services.json
+GoogleService-Info.plist
+.DS_Store

@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    // A user owns only their own session tree. The bridge uses the Admin SDK
+    // (bypasses rules); phones use these client rules.
+    match /sessions/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+      match /{sub}/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+  }
+}

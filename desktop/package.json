@@ -1,0 +1,47 @@
+{
+  "name": "skybound-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "build": "vite build",
+    "dist:mac": "vite build && electron-builder --mac dmg --universal",
+    "dist:win": "vite build && electron-builder --win nsis",
+    "dist": "vite build && electron-builder --mac dmg --universal --win nsis"
+  },
+  "build": {
+    "appId": "cx.skybound.efb",
+    "productName": "SkyBound EFB",
+    "files": ["dist/**/*", "electron/**/*"],
+    "directories": { "output": "release" },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["universal"] }],
+      "category": "public.app-category.utilities",
+      "identity": null
+    },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    }
+  },
+  "dependencies": {
+    "firebase": "^10.12.0",
+    "lucide-react": "^0.460.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "tailwindcss": "^4.0.0",
+    "vite": "^6.0.0",
+    "wait-on": "^8.0.1"
+  }
+}
