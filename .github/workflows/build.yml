@@ -7,58 +7,48 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
-  # ── macOS: universal .dmg ─────────────────────────────────────────────────
+  # ── macOS DMG ─────────────────────────────────────────────────────────────
   build-mac:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          # cache kikapcsolva — package-lock.json csak npm install után keletkezik
-
-      - name: Install deps
-        run: npm install
+      - run: npm install
         working-directory: desktop
-
-      - name: Build universal .dmg
-        run: npm run dist:mac
+      - name: Build DMG (no publish)
+        run: npx electron-builder --mac dmg --universal --publish never
         working-directory: desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload .dmg
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: SkyBound-mac-dmg
+          name: mac-dmg
           path: desktop/release/*.dmg
 
-  # ── Windows: .exe installer ───────────────────────────────────────────────
+  # ── Windows EXE ───────────────────────────────────────────────────────────
   build-win:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Install deps
-        run: npm install
+      - run: npm install
         working-directory: desktop
-
-      - name: Build .exe
-        run: npm run dist:win
+      - name: Build EXE (no publish)
+        run: npx electron-builder --win nsis --publish never
         working-directory: desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload .exe
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: SkyBound-win-exe
+          name: win-exe
           path: desktop/release/*.exe
 
   # ── GitHub Release (csak tag-re) ──────────────────────────────────────────
@@ -66,17 +56,17 @@ jobs:
     needs: [build-mac, build-win]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-
-      - name: Create GitHub Release
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          files: |
+            artifacts/mac-dmg/*.dmg
+            artifacts/win-exe/*.exe
           generate_release_notes: true
+          prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
