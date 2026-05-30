@@ -25,14 +25,12 @@ function createWindow() {
     win.loadURL("http://localhost:5173");
     win.webContents.openDevTools({ mode: "detach" });
   } else {
-    win.loadFile(path.join(__dirname, "../dist/index.html"));
-    win.webContents.openDevTools({ mode: "detach" }); // ideiglenesen debug miatt
+    // In packaged app __dirname is inside app.asar — use app.getAppPath() instead
+    const indexPath = path.join(app.getAppPath(), "dist", "index.html");
+    win.loadFile(indexPath);
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-  if (url.includes("accounts.google.com") || url.includes("firebaseapp.com/__/auth")) {
-    return { action: "allow" };
-  }
     shell.openExternal(url);
     return { action: "deny" };
   });
@@ -42,16 +40,28 @@ function createWindow() {
 const n = (v) => (v == null || v === "" ? null : Number(v));
 const toA = (x) => (Array.isArray(x) ? x : x ? [x] : []);
 function parseOFP(d) {
-  const w=d.weights||{}, f=d.fuel||{}, g=d.general||{};
+  const w=d.weights||{}, f=d.fuel||{}, g=d.general||{}, t=d.times||{};
+  const n2 = (v) => (v==null||v===""?null:Number(v));
   return {
     dep: d?.origin?.icao_code||null, arr: d?.destination?.icao_code||null,
+    altn: d?.alternate?.icao_code||null,
     aircraft: `${d?.aircraft?.icaocode||""} ${d?.aircraft?.name||""}`.trim()||null,
-    units: w.units||"kg", pax: n(w.pax_count), payload: n(w.payload),
-    zfw: n(w.est_zfw), tow: n(w.est_tow), costindex: n(g.costindex),
-    blockFuel: n(f.plan_ramp), route: g.route||null,
-    fixes: toA(d?.navlog?.fix).map(x=>({
+    units: w.units||"kg",
+    pax: n2(w.pax_count), cargo: n2(w.cargo), payload: n2(w.payload),
+    zfw: n2(w.est_zfw), tow: n2(w.est_tow),
+    costindex: n2(g.costindex),
+    blockFuel:   n2(f.plan_ramp),
+    enrouteBurn: n2(f.enroute_burn),
+    contFuel:    n2(f.contingency),
+    altFuel:     n2(f.alternate_burn),
+    resFuel:     n2(f.reserve),
+    extraFuel:   n2(f.extra),
+    route: g.route||null,
+    routeDistanceNm: n2(g.route_distance)||n2(g.air_distance),
+    ete: t.est_time_enroute ? `${Math.floor(n2(t.est_time_enroute)/3600)}h${String(Math.floor((n2(t.est_time_enroute)%3600)/60)).padStart(2,"0")}m` : null,
+    fixes: (Array.isArray(d?.navlog?.fix)?d.navlog.fix:d?.navlog?.fix?[d.navlog.fix]:[]).map(x=>({
       ident:x.ident, stage:x.stage,
-      lat:n(x.pos_lat), lon:n(x.pos_long), altitude:n(x.altitude_feet),
+      lat:n2(x.pos_lat), lon:n2(x.pos_long), altitude:n2(x.altitude_feet),
     })).filter(x=>x.ident&&x.lat!=null),
   };
 }
