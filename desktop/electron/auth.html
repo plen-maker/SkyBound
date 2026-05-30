@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>SkyBound — Bejelentkezés</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#070b12;color:#cdd9ec;font-family:system-ui,sans-serif;
+         display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:20px;}
+    .logo{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#5ec8ff,#7c8cff);
+          display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 4px 20px rgba(94,200,255,.35);}
+    h1{font-size:22px;font-weight:700;letter-spacing:.4px;}
+    p{font-size:13px;color:#5a7090;margin-bottom:8px;}
+    button{display:flex;align-items:center;gap:10px;background:#fff;color:#1a1a1a;border:none;
+           border-radius:10px;padding:12px 22px;font-size:14px;font-weight:600;cursor:pointer;
+           transition:transform .15s,box-shadow .15s;}
+    button:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,.3);}
+    button:active{transform:scale(.97);}
+    .err{color:#f06080;font-size:12px;text-align:center;max-width:280px;}
+    .spin{width:20px;height:20px;border:2px solid #ddd;border-top-color:#5ec8ff;border-radius:50%;
+          animation:sp 1s linear infinite;display:none;}
+    @keyframes sp{to{transform:rotate(360deg)}}
+    svg{width:18px;height:18px;}
+  </style>
+</head>
+<body>
+  <div class="logo">✈</div>
+  <h1>SkyBound EFB</h1>
+  <p>Jelentkezz be a folytatáshoz</p>
+  <button id="btn" onclick="login()">
+    <svg viewBox="0 0 48 48"><path fill="#4285F4" d="M45 24c0-1.6-.1-2.7-.4-3.9H24v7.4h12c-.2 1.9-1.6 4.8-4.5 6.7l6.6 5.1C42 35.6 45 30.4 45 24z"/><path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-6.6-5.1c-1.8 1.2-4.2 2-7.9 2-6 0-11.2-4-13-9.6l-6.8 5.3C8 41 15.4 46 24 46z"/><path fill="#FBBC05" d="M11 28c-.5-1.4-.7-2.9-.7-4s.2-2.6.7-4l-6.8-5.3C2.8 17.4 2 20.6 2 24s.8 6.6 2.2 9.3L11 28z"/><path fill="#EA4335" d="M24 9.5c3.3 0 5.5 1.4 6.8 2.6l5.8-5.7C33 3 28.9 1 24 1 15.4 1 8 6 4.2 14.7L11 20c1.8-5.6 7-10.5 13-10.5z"/></svg>
+    Belépés Google-lel
+  </button>
+  <div class="spin" id="spin"></div>
+  <div class="err" id="err"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, signInWithPopup, GoogleAuthProvider }
+      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+    const app = initializeApp({
+      apiKey: "AIzaSyAxHmLWOIJl4xC44uHsRbxqzRhF4mA0kqE",
+      authDomain: "simapp-99f40.firebaseapp.com",
+      projectId: "simapp-99f40",
+      appId: "1:993511543138:web:ec3a0d3e19713160111c3b",
+    });
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+
+    window.login = async () => {
+      document.getElementById("btn").style.display = "none";
+      document.getElementById("spin").style.display = "block";
+      document.getElementById("err").textContent = "";
+      try {
+        const result = await signInWithPopup(auth, provider);
+        const idToken = await result.user.getIdToken();
+        window.authBridge.sendUser({
+          uid: result.user.uid,
+          email: result.user.email,
+          displayName: result.user.displayName,
+          photoURL: result.user.photoURL,
+          idToken,
+        });
+      } catch(e) {
+        document.getElementById("btn").style.display = "flex";
+        document.getElementById("spin").style.display = "none";
+        document.getElementById("err").textContent = e.message || String(e);
+        window.authBridge.sendError(e.message || String(e));
+      }
+    };
+  </script>
+</body>
+</html>
