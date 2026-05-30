@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "SkyBound EFB",
+    "slug": "skybound-efb",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#070b12",
+    "scheme": "skybound",
+    "ios": {
+      "bundleIdentifier": "cx.skybound.efb",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "UIBackgroundModes": ["remote-notification"]
+      }
+    },
+    "android": {
+      "package": "cx.skybound.efb",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#070b12"
+      },
+      "permissions": ["RECEIVE_BOOT_COMPLETED", "VIBRATE"]
+    },
+    "plugins": [
+      "expo-router",
+      ["expo-notifications", {
+        "icon": "./assets/icon.png",
+        "color": "#5ec8ff",
+        "sounds": []
+      }]
+    ],
+    "extra": {
+      "firebase": {
+        "apiKey": "AIzaSyAxHmLWOIJl4xC44uHsRbxqzRhF4mA0kqE",
+        "authDomain": "simapp-99f40.firebaseapp.com",
+        "databaseURL": "https://simapp-99f40-default-rtdb.europe-west1.firebasedatabase.app",
+        "projectId": "simapp-99f40",
+        "storageBucket": "simapp-99f40.firebasestorage.app",
+        "messagingSenderId": "993511543138",
+        "appId": "1:993511543138:web:ec3a0d3e19713160111c3b"
+      }
+    },
+    "eas": {
+      "projectId": "skybound-efb"
+    }
+  }
+}

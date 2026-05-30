@@ -1,0 +1,32 @@
+
+mkdir -p /home/claude/skybound-mobile/.github/workflows
+cat > /home/claude/skybound-mobile/.github/workflows/build-apk.yml << 'EOF'
+name: SkyBound Mobile — APK Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Install deps
+        run: npm install
+        working-directory: mobile
+      - name: Build APK (EAS cloud)
+        run: eas build --platform android --profile preview --non-interactive --no-wait
+        working-directory: mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
