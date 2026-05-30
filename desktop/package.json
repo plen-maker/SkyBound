@@ -4,23 +4,47 @@
   "private": true,
   "main": "electron/main.js",
   "scripts": {
-    "dev":      "NODE_ENV=development concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "build":    "vite build",
+    "dev": "NODE_ENV=development concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "build": "vite build",
     "dist:mac": "vite build && electron-builder --mac dmg --universal --publish never",
     "dist:win": "vite build && electron-builder --win nsis --publish never"
   },
   "build": {
     "appId": "cx.skybound.efb",
     "productName": "SkyBound EFB",
-    "files": ["dist/**/*", "electron/**/*"],
-    "directories": { "output": "release" },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
     "mac": {
-      "target": [{ "target": "dmg", "arch": ["universal"] }],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
       "category": "public.app-category.utilities",
       "identity": null
     },
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "plen-maker",
+      "repo": "SkyBound"
     }
   },
   "dependencies": {
@@ -39,5 +63,11 @@
     "tailwindcss": "^4.0.0",
     "vite": "^6.0.0",
     "wait-on": "^8.0.1"
+  },
+  "description": "Electronic Flight Bag for MSFS",
+  "author": "plen-maker",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/plen-maker/SkyBound.git"
   }
 }
