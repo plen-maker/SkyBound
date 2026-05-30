@@ -1,177 +1,82 @@
-const { app, BrowserWindow, shell, ipcMain } = require("electron");
-const { autoUpdater } = require("electron-updater");
-const http   = require("node:http");
-const path   = require("node:path");
-const fs     = require("node:fs");
-const os     = require("node:os");
+const { app, BrowserWindow, shell, ipcMain, protocol } = require("electron");
+const path = require("node:path");
+const fs   = require("node:fs");
+const os   = require("node:os");
 
-const isDev = !app.isPackaged;
-const SETTINGS_PATH = path.join(os.homedir(), ".skybound-settings.json");
+const isDev = process.env.NODE_ENV === "development";
+const SETTINGS = path.join(os.homedir(), ".skybound.json");
 
-let mainWin, authWin, browserWin;
-let authServer, authPort;
+let win;
 
-/* ── Helyi HTTP szerver az auth.html-hez ─────────────────────────────────── */
-/* A Firebase csak localhost-ot enged file:// helyett — ezért kell a szerver. */
-function startAuthServer() {
-  return new Promise((resolve) => {
-    const htmlPath = isDev
-      ? path.join(__dirname, "auth.html")
-      : path.join(process.resourcesPath, "electron", "auth.html");
-
-    authServer = http.createServer((req, res) => {
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(fs.readFileSync(htmlPath));
-    });
-
-    authServer.listen(0, "127.0.0.1", () => {
-      authPort = authServer.address().port;
-      console.log("[auth] HTTP szerver:", authPort);
-      resolve(authPort);
-    });
-  });
-}
-
-/* ── Auto-updater ────────────────────────────────────────────────────────── */
-function setupUpdater() {
-  autoUpdater.autoDownload = false;
-  autoUpdater.on("checking-for-update",  () => send("updater:checking"));
-  autoUpdater.on("update-not-available", () => send("updater:latest"));
-  autoUpdater.on("update-available",     (i) => send("updater:available", i));
-  autoUpdater.on("download-progress",    (p) => send("updater:progress", p));
-  autoUpdater.on("update-downloaded",    (i) => send("updater:ready", i));
-  autoUpdater.on("error", () => checkGitHubRelease());
-  if (!isDev) autoUpdater.checkForUpdates();
-  setInterval(() => { if (!isDev) autoUpdater.checkForUpdates(); }, 60 * 60 * 1000);
-}
-
-async function checkGitHubRelease() {
-  try {
-    const res = await fetch("https://api.github.com/repos/plen-maker/SkyBound/releases/latest",
-      { headers: { Accept: "application/vnd.github+json" } });
-    if (!res.ok) return;
-    const rel = await res.json();
-    const latest = rel.tag_name?.replace(/^v/, "");
-    if (latest && latest !== app.getVersion())
-      send("updater:available", { version: latest, releaseUrl: rel.html_url });
-    else send("updater:latest");
-  } catch {}
-}
-
-/* ── Main window ─────────────────────────────────────────────────────────── */
-function createMain() {
-  mainWin = new BrowserWindow({
-    width: 1380, height: 880, minWidth: 960, minHeight: 640,
+function createWindow() {
+  win = new BrowserWindow({
+    width: 1380, height: 880,
+    minWidth: 960, minHeight: 640,
     backgroundColor: "#070b12",
     titleBarStyle: "hiddenInset",
-    vibrancy: "under-window",
-    visualEffectState: "active",
-    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
-  if (isDev) mainWin.loadURL("http://localhost:5173");
-  else       mainWin.loadFile(path.join(__dirname, "../dist/index.html"));
-  mainWin.once("ready-to-show", () => mainWin.show());
-  mainWin.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url); return { action: "deny" };
-  });
-}
 
-/* ── Auth window — localhost HTTP-n tölt, nem file:// ────────────────────── */
-function openAuthWindow() {
-  if (authWin && !authWin.isDestroyed()) { authWin.focus(); return; }
-  authWin = new BrowserWindow({
-    width: 440, height: 580,
-    backgroundColor: "#070b12",
-    titleBarStyle: "hiddenInset",
-    resizable: false,
-    webPreferences: {
-      preload: path.join(__dirname, "auth-preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-  // Betöltés localhost-ról → Firebase engedi
-  authWin.loadURL(`http://127.0.0.1:${authPort}/`);
-  authWin.on("closed", () => { authWin = null; });
-}
-
-/* ── In-app browser ──────────────────────────────────────────────────────── */
-function openBrowserWindow(url) {
-  if (browserWin && !browserWin.isDestroyed()) {
-    browserWin.loadURL(url); browserWin.focus(); return;
+  if (isDev) {
+    win.loadURL("http://localhost:5173");
+    win.webContents.openDevTools({ mode: "detach" });
+  } else {
+    win.loadFile(path.join(__dirname, "../dist/index.html"));
+    win.webContents.openDevTools({ mode: "detach" }); // ideiglenesen debug miatt
   }
-  browserWin = new BrowserWindow({
-    width: 1280, height: 820,
-    backgroundColor: "#070b12",
-    titleBarStyle: "hiddenInset",
-    webPreferences: { nodeIntegration: false, contextIsolation: true },
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+  if (url.includes("accounts.google.com") || url.includes("firebaseapp.com/__/auth")) {
+    return { action: "allow" };
+  }
+    shell.openExternal(url);
+    return { action: "deny" };
   });
-  browserWin.loadURL(url);
-  browserWin.on("closed", () => { browserWin = null; });
 }
 
-/* ── IPC ─────────────────────────────────────────────────────────────────── */
-const send = (ch, data) => {
-  if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send(ch, data);
-};
-
-ipcMain.on("auth:user",  (_e, user) => { send("auth:success", user); authWin?.close(); });
-ipcMain.on("auth:error", (_e, msg)  => send("auth:error", msg));
-
-ipcMain.handle("auth:open",         () => openAuthWindow());
-ipcMain.handle("open:external",     (_e, url) => shell.openExternal(url));
-ipcMain.handle("open:inapp",        (_e, url) => openBrowserWindow(url));
-ipcMain.handle("updater:download",  () => autoUpdater.downloadUpdate());
-ipcMain.handle("updater:install",   () => autoUpdater.quitAndInstall(false, true));
-ipcMain.handle("updater:openrel",   (_e, url) => shell.openExternal(url || "https://github.com/plen-maker/SkyBound/releases/latest"));
-ipcMain.handle("updater:check",     () => isDev ? checkGitHubRelease() : autoUpdater.checkForUpdates());
-ipcMain.handle("settings:save",     (_e, s) => { fs.writeFileSync(SETTINGS_PATH, JSON.stringify(s, null, 2)); return true; });
-ipcMain.handle("settings:load",     () => { try { return JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf8")); } catch { return {}; } });
-
-const num = (v) => (v == null || v === "" ? null : Number(v));
-const toArr = (x) => (Array.isArray(x) ? x : x ? [x] : []);
+// SimBrief
+const n = (v) => (v == null || v === "" ? null : Number(v));
+const toA = (x) => (Array.isArray(x) ? x : x ? [x] : []);
 function parseOFP(d) {
   const w=d.weights||{}, f=d.fuel||{}, g=d.general||{};
   return {
-    dep:d?.origin?.icao_code||null, arr:d?.destination?.icao_code||null,
-    altn:d?.alternate?.icao_code||null,
-    aircraft:`${d?.aircraft?.icaocode||""} ${d?.aircraft?.name||""}`.trim()||null,
-    units:w.units||"kg", pax:num(w.pax_count), payload:num(w.payload),
-    zfw:num(w.est_zfw), tow:num(w.est_tow), costindex:num(g.costindex),
-    blockFuel:num(f.plan_ramp), route:g.route||null,
-    routeDistanceNm:num(g.route_distance)??num(g.air_distance),
-    fixes:toArr(d?.navlog?.fix).map(x=>({
-      ident:x.ident, type:x.type, stage:x.stage,
-      lat:num(x.pos_lat), lon:num(x.pos_long), altitude:num(x.altitude_feet),
+    dep: d?.origin?.icao_code||null, arr: d?.destination?.icao_code||null,
+    aircraft: `${d?.aircraft?.icaocode||""} ${d?.aircraft?.name||""}`.trim()||null,
+    units: w.units||"kg", pax: n(w.pax_count), payload: n(w.payload),
+    zfw: n(w.est_zfw), tow: n(w.est_tow), costindex: n(g.costindex),
+    blockFuel: n(f.plan_ramp), route: g.route||null,
+    fixes: toA(d?.navlog?.fix).map(x=>({
+      ident:x.ident, stage:x.stage,
+      lat:n(x.pos_lat), lon:n(x.pos_long), altitude:n(x.altitude_feet),
     })).filter(x=>x.ident&&x.lat!=null),
   };
 }
-ipcMain.handle("simbrief:fetch", async (_e, username) => {
-  if (!username) return { error: "Nincs SimBrief usernév" };
+
+ipcMain.handle("simbrief:fetch", async (_e, u) => {
+  if (!u) return { error: "Nincs usernév" };
   try {
-    const res = await fetch(`https://www.simbrief.com/api/xml.fetcher.php?username=${encodeURIComponent(username)}&json=1`);
-    if (!res.ok) return { error: `HTTP ${res.status}` };
-    const d = await res.json();
+    const r = await fetch(`https://www.simbrief.com/api/xml.fetcher.php?username=${encodeURIComponent(u)}&json=1`);
+    if (!r.ok) return { error: `HTTP ${r.status}` };
+    const d = await r.json();
     if (d?.fetch?.status === "Error") return { error: d.fetch.message };
     return { ofp: parseOFP(d) };
-  } catch(e) { return { error: String(e.message||e) }; }
+  } catch(e) { return { error: String(e) }; }
 });
 
-/* ── App lifecycle ────────────────────────────────────────────────────────── */
-app.whenReady().then(async () => {
-  await startAuthServer();
-  createMain();
-  setupUpdater();
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMain();
-  });
+ipcMain.handle("open:external", (_e, url) => shell.openExternal(url));
+ipcMain.handle("open:inapp", (_e, url) => {
+  const b = new BrowserWindow({ width:1280, height:820, backgroundColor:"#070b12", titleBarStyle:"hiddenInset" });
+  b.loadURL(url);
 });
-app.on("window-all-closed", () => {
-  authServer?.close();
-  if (process.platform !== "darwin") app.quit();
+ipcMain.handle("settings:save", (_e, s) => { fs.writeFileSync(SETTINGS, JSON.stringify(s,null,2)); return true; });
+ipcMain.handle("settings:load", () => { try { return JSON.parse(fs.readFileSync(SETTINGS,"utf8")); } catch { return {}; } });
+
+app.whenReady().then(() => {
+  createWindow();
+  app.on("activate", () => { if (BrowserWindow.getAllWindows().length===0) createWindow(); });
 });
+app.on("window-all-closed", () => { if (process.platform!=="darwin") app.quit(); });

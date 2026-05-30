@@ -4,34 +4,24 @@
   "private": true,
   "main": "electron/main.js",
   "scripts": {
-    "dev":      "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "dev":      "NODE_ENV=development concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
     "build":    "vite build",
-    "dist:mac": "vite build && electron-builder --mac dmg --universal",
-    "dist:win": "vite build && electron-builder --win nsis"
+    "dist:mac": "vite build && electron-builder --mac dmg --universal --publish never",
+    "dist:win": "vite build && electron-builder --win nsis --publish never"
   },
   "build": {
     "appId": "cx.skybound.efb",
     "productName": "SkyBound EFB",
     "files": ["dist/**/*", "electron/**/*"],
     "directories": { "output": "release" },
-    "publish": {
-      "provider": "github",
-      "owner": "plen-maker",
-      "repo": "SkyBound",
-      "releaseType": "release"
-    },
     "mac": {
-      "target": [
-        { "target": "dmg", "arch": ["universal"] },
-        { "target": "zip", "arch": ["universal"] }
-      ],
+      "target": [{ "target": "dmg", "arch": ["universal"] }],
       "category": "public.app-category.utilities",
       "identity": null
     },
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }]
-    },
-    "nsis": { "oneClick": true, "perMachine": false }
+    }
   },
   "dependencies": {
     "electron-updater": "^6.3.9",
