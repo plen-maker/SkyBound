@@ -7,8 +7,16 @@ import {
   Music, MessageCircle, Globe, Radar, Navigation2, Wifi, WifiOff,
   Plus, Trash2, ChevronRight, ChevronLeft, Users, Weight, Fuel,
   ArrowDownRight, Loader2, AlertCircle, Gamepad2, ExternalLink,
-  Chrome, Check, RefreshCw, LogOut, Download, BookOpen,
+  Chrome, Check, RefreshCw, LogOut, Download, BookOpen, Radio,
 } from "lucide-react";
+import { lazy, Suspense } from "react";
+const OFPTab      = lazy(() => import("./OFPTab.jsx"));
+const VatsimTab   = lazy(() => import("./VatsimTab.jsx"));
+const ChartsTab   = lazy(() => import("./ChartsTab.jsx"));
+
+function TabLoader() {
+  return <div style={{ display:"flex",alignItems:"center",justifyContent:"center",height:200,color:"#5a7090",fontSize:13 }}>Betöltés…</div>;
+}
 
 /* ── Firebase ── */
 const FB = {
@@ -94,6 +102,8 @@ const TABS = [
   { id:"home",        label:"Home",     icon:Plane },
   { id:"map",         label:"Map",      icon:MapIcon },
   { id:"ofp",         label:"SimBrief", icon:FileText },
+  { id:"vatsim",      label:"VATSIM",   icon:Radio },
+  { id:"charts",      label:"Charts",   icon:MapIcon },
   { id:"alerts",      label:"Alerts",   icon:Bell },
   { id:"controllers", label:"Controls", icon:Gamepad2 },
   { id:"settings",    label:"Settings", icon:Cog },
@@ -167,13 +177,20 @@ function AppShell({ user }) {
   const [ofp, setOfp] = useState(null);
   const [ofpState, setOfpState] = useState("idle");
   const [ofpErr, setOfpErr] = useState("");
+  const [ofpMode, setOfpMode] = useState(() => ls.get("sb_ofpMode","simplified"));
+  const saveOfpMode = (m) => { setOfpMode(m); ls.set("sb_ofpMode", m); };
   const loadOFP = useCallback(async (u=settings.sbUser) => {
     const un=(u||"").trim();
     if (!un) { setOfpState("error"); setOfpErr("Adj meg SimBrief usernevet."); return; }
     setOfpState("loading"); setOfpErr("");
-    const r = await (window.skybound?.fetchOFP?.(un) ?? Promise.resolve({error:"csak Electronban"}));
-    if (r?.error) { setOfpState("error"); setOfpErr(r.error); }
-    else { setOfp(r.ofp); setOfpState("idle"); save("sbUser", un); }
+    try {
+      const r = await Promise.race([
+        window.skybound?.fetchOFP?.(un) ?? Promise.resolve({error:"csak Electronban"}),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error("Timeout — ellenőrizd a SimBrief usernevet")),12000)),
+      ]);
+      if (r?.error) { setOfpState("error"); setOfpErr(r.error); }
+      else { setOfp(r.ofp); setOfpState("idle"); save("sbUser", un); }
+    } catch(e) { setOfpState("error"); setOfpErr(e.message); }
   }, [settings.sbUser, save]);
   useEffect(() => { if (settings.sbUser) loadOFP(settings.sbUser); }, []);
 
@@ -354,43 +371,30 @@ function AppShell({ user }) {
 
           {/* OFP */}
           {tab==="ofp"&&(
-            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-              <SLabel>SimBrief OFP</SLabel>
-              <div className="glow" style={{ background:"var(--panel)",border:"1px solid var(--line)",borderRadius:16,padding:14 }}>
-                <div style={{ display:"flex",gap:10,alignItems:"flex-end" }}>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:9,color:"var(--dim)",letterSpacing:1,marginBottom:5 }}>SIMBRIEF USERNÉV</div>
-                    <input value={settings.sbUser} onChange={e=>save("sbUser",e.target.value)}
-                      onKeyDown={e=>e.key==="Enter"&&loadOFP(settings.sbUser)}
-                      placeholder="pl. chris_vatsim" style={{ ...inp, width:"100%" }}/>
-                  </div>
-                  <button onClick={()=>loadOFP(settings.sbUser)} className="sp"
-                    style={{ display:"flex",alignItems:"center",gap:6,background:"var(--cy)",color:"#070b12",
-                      border:"none",borderRadius:10,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0 }}>
-                    {ofpState==="loading"?<Loader2 size={14} className="spin2"/>:<><FileText size={13}/>Betölt</>}
-                  </button>
-                </div>
-              </div>
-              {ofpState==="error"&&<Alert type="error">{ofpErr}</Alert>}
-              {ofp&&(<>
-                <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10 }}>
-                  {[["Route",`${ofp.dep||"?"}→${ofp.arr||"?"}`],["PAX",ofp.pax??"—"],
-                    ["Payload",ofp.payload!=null?`${ofp.payload} ${ofp.units}`:"—"],
-                    ["Block",ofp.blockFuel!=null?`${ofp.blockFuel} ${ofp.units}`:"—"]
-                  ].map(([l,v],i)=>(
-                    <div key={l} className="fu glow" style={{ background:"var(--p2)",border:"1px solid var(--line)",
-                      borderRadius:12,padding:12,animationDelay:`${i*35}ms` }}>
-                      <div style={{ fontSize:9,color:"var(--dim)",letterSpacing:1 }}>{l.toUpperCase()}</div>
-                      <div className="mono" style={{ fontSize:16,marginTop:2 }}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="glow" style={{ background:"var(--panel)",border:"1px solid var(--line)",borderRadius:16,padding:14 }}>
-                  <div style={{ fontSize:9,color:"var(--dim)",marginBottom:6,letterSpacing:1 }}>ROUTE</div>
-                  <div className="mono" style={{ fontSize:12,lineHeight:1.8,wordBreak:"break-all" }}>{ofp.route||"—"}</div>
-                </div>
-              </>)}
-            </div>
+            <Suspense fallback={<TabLoader/>}>
+              <OFPTab
+                sbUser={settings.sbUser}
+                setSbUser={v=>save("sbUser",v)}
+                ofp={ofp}
+                state={ofpState}
+                error={ofpErr}
+                onLoad={loadOFP}
+                ofpMode={ofpMode}
+                setOfpMode={saveOfpMode}
+              />
+            </Suspense>
+          )}
+          {/* VATSIM */}
+          {tab==="vatsim"&&(
+            <Suspense fallback={<TabLoader/>}>
+              <VatsimTab ofp={ofp}/>
+            </Suspense>
+          )}
+          {/* Charts */}
+          {tab==="charts"&&(
+            <Suspense fallback={<TabLoader/>}>
+              <ChartsTab ofp={ofp}/>
+            </Suspense>
           )}
 
           {/* ALERTS */}
