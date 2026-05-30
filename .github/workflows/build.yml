@@ -8,25 +8,28 @@ on:
     branches: [main]
 
 jobs:
-  # ── macOS: .dmg (Intel + Apple Silicon universal) ─────────────────────────
+  # ── macOS: universal .dmg ─────────────────────────────────────────────────
   build-mac:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
+          # cache kikapcsolva — package-lock.json csak npm install után keletkezik
+
       - name: Install deps
-        run: npm ci
+        run: npm install
         working-directory: desktop
+
       - name: Build universal .dmg
         run: npm run dist:mac
         working-directory: desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload .dmg artifact
+
+      - name: Upload .dmg
         uses: actions/upload-artifact@v4
         with:
           name: SkyBound-mac-dmg
@@ -37,20 +40,22 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
+
       - name: Install deps
-        run: npm ci
+        run: npm install
         working-directory: desktop
+
       - name: Build .exe
         run: npm run dist:win
         working-directory: desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload .exe artifact
+
+      - name: Upload .exe
         uses: actions/upload-artifact@v4
         with:
           name: SkyBound-win-exe
@@ -65,7 +70,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
-        with: { path: artifacts }
+        with:
+          path: artifacts
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
