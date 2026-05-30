@@ -8,14 +8,20 @@
     "ios": {
       "bundleIdentifier": "cx.skybound.efb",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "infoPlist": { "UIBackgroundModes": ["remote-notification"] }
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      }
     },
     "android": {
       "package": "cx.skybound.efb",
       "googleServicesFile": "./google-services.json",
       "useNextNotificationsApi": true
     },
-    "plugins": ["expo-notifications"],
+    "plugins": [
+      "expo-notifications"
+    ],
     "extra": {
       "firebase": {
         "apiKey": "FILL_ME",
@@ -29,7 +35,11 @@
         "iosClientId": "FILL_ME.apps.googleusercontent.com",
         "androidClientId": "FILL_ME.apps.googleusercontent.com",
         "webClientId": "FILL_ME.apps.googleusercontent.com"
+      },
+      "eas": {
+        "projectId": "8651208a-b93e-438c-a837-12dd188b2f52"
       }
-    }
+    },
+    "owner": "ddnemet"
   }
 }
