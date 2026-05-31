@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { Stack } from "expo-router";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { app } from "../../src/firebase";
-import LoginScreen from "../../src/screens/LoginScreen";
+import { app } from "../src/firebase";
+import LoginScreen from "../src/screens/LoginScreen";
 
 const auth = getAuth(app);
 
