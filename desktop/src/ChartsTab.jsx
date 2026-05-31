@@ -19,7 +19,7 @@ const PROVIDERS = [
     id: "lido",
     name: "FltPlan / Lido (MSFS)",
     desc: "Microsoft Flight Simulator beépített Lido chartjai",
-    url: (icao) => `https://flightplanner.microsoft.com/`,
+    url: (icao) => `https://planner.flightsimulator.com/`,
     color: "#7c8cff",
     badge: "MSFS",
   },
