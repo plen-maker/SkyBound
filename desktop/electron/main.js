@@ -1,4 +1,5 @@
-const { app, BrowserWindow, shell, ipcMain, protocol } = require("electron");
+const { app, BrowserWindow, shell, ipcMain } = require("electron");
+const { setupUpdater } = require("./updater");
 const path = require("node:path");
 const fs   = require("node:fs");
 const os   = require("node:os");
@@ -25,25 +26,28 @@ function createWindow() {
     win.loadURL("http://localhost:5173");
     win.webContents.openDevTools({ mode: "detach" });
   } else {
-    // In packaged app __dirname is inside app.asar — use app.getAppPath() instead
     const indexPath = path.join(app.getAppPath(), "dist", "index.html");
     win.loadFile(indexPath);
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.includes("accounts.google.com") || url.includes("firebaseapp.com/__/auth")) {
+      return { action: "allow" };
+    }
     shell.openExternal(url);
     return { action: "deny" };
   });
 }
 
-// SimBrief
-const n = (v) => (v == null || v === "" ? null : Number(v));
-const toA = (x) => (Array.isArray(x) ? x : x ? [x] : []);
+/* ── SimBrief fetch (no CORS in Node) ──────────────────────────────────── */
+const n2 = (v) => (v == null || v === "" ? null : Number(v));
+const toArr = (x) => (Array.isArray(x) ? x : x ? [x] : []);
+
 function parseOFP(d) {
   const w=d.weights||{}, f=d.fuel||{}, g=d.general||{}, t=d.times||{};
-  const n2 = (v) => (v==null||v===""?null:Number(v));
   return {
-    dep: d?.origin?.icao_code||null, arr: d?.destination?.icao_code||null,
+    dep:  d?.origin?.icao_code||null,
+    arr:  d?.destination?.icao_code||null,
     altn: d?.alternate?.icao_code||null,
     aircraft: `${d?.aircraft?.icaocode||""} ${d?.aircraft?.name||""}`.trim()||null,
     units: w.units||"kg",
@@ -58,11 +62,13 @@ function parseOFP(d) {
     extraFuel:   n2(f.extra),
     route: g.route||null,
     routeDistanceNm: n2(g.route_distance)||n2(g.air_distance),
-    ete: t.est_time_enroute ? `${Math.floor(n2(t.est_time_enroute)/3600)}h${String(Math.floor((n2(t.est_time_enroute)%3600)/60)).padStart(2,"0")}m` : null,
-    fixes: (Array.isArray(d?.navlog?.fix)?d.navlog.fix:d?.navlog?.fix?[d.navlog.fix]:[]).map(x=>({
-      ident:x.ident, stage:x.stage,
-      lat:n2(x.pos_lat), lon:n2(x.pos_long), altitude:n2(x.altitude_feet),
-    })).filter(x=>x.ident&&x.lat!=null),
+    ete: t.est_time_enroute
+      ? `${Math.floor(n2(t.est_time_enroute)/3600)}h${String(Math.floor((n2(t.est_time_enroute)%3600)/60)).padStart(2,"0")}m`
+      : null,
+    fixes: toArr(d?.navlog?.fix).map(x => ({
+      ident: x.ident, stage: x.stage,
+      lat: n2(x.pos_lat), lon: n2(x.pos_long), altitude: n2(x.altitude_feet),
+    })).filter(x => x.ident && x.lat != null),
   };
 }
 
@@ -77,16 +83,37 @@ ipcMain.handle("simbrief:fetch", async (_e, u) => {
   } catch(e) { return { error: String(e) }; }
 });
 
+/* ── Navigation / windows ───────────────────────────────────────────────── */
 ipcMain.handle("open:external", (_e, url) => shell.openExternal(url));
 ipcMain.handle("open:inapp", (_e, url) => {
-  const b = new BrowserWindow({ width:1280, height:820, backgroundColor:"#070b12", titleBarStyle:"hiddenInset" });
+  const b = new BrowserWindow({
+    width: 1280, height: 820,
+    backgroundColor: "#070b12",
+    titleBarStyle: "hiddenInset",
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
+  });
   b.loadURL(url);
 });
-ipcMain.handle("settings:save", (_e, s) => { fs.writeFileSync(SETTINGS, JSON.stringify(s,null,2)); return true; });
-ipcMain.handle("settings:load", () => { try { return JSON.parse(fs.readFileSync(SETTINGS,"utf8")); } catch { return {}; } });
 
+/* ── Settings ───────────────────────────────────────────────────────────── */
+ipcMain.handle("settings:save", (_e, s) => {
+  fs.writeFileSync(SETTINGS, JSON.stringify(s, null, 2));
+  return true;
+});
+ipcMain.handle("settings:load", () => {
+  try { return JSON.parse(fs.readFileSync(SETTINGS, "utf8")); }
+  catch { return {}; }
+});
+
+/* ── App lifecycle ──────────────────────────────────────────────────────── */
 app.whenReady().then(() => {
   createWindow();
-  app.on("activate", () => { if (BrowserWindow.getAllWindows().length===0) createWindow(); });
+  setupUpdater(win);
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
 });
-app.on("window-all-closed", () => { if (process.platform!=="darwin") app.quit(); });
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
+});
