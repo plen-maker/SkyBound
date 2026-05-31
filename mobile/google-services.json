@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "993511543138",
+    "firebase_url": "https://simapp-99f40-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "simapp-99f40",
+    "storage_bucket": "simapp-99f40.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:993511543138:android:d0f93b1c9e361bcd111c3b",
+        "android_client_info": {
+          "package_name": "sxa.skybound.efb"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "993511543138-tj6k059mfn3plptquvj6gfev0oa08jde.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAUxRP1hhwWS8ainbuTaIU8Ts8hI1VqQ5U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "993511543138-tj6k059mfn3plptquvj6gfev0oa08jde.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
