@@ -29,7 +29,12 @@ const FB = {
 };
 const fbApp = getApps().length ? getApps()[0] : initializeApp(FB);
 const auth  = getAuth(fbApp);
-const db    = getDatabase(fbApp);
+// DB initialized lazily to avoid blocking startup
+let _db = null;
+const getDB = () => {
+  if (!_db) _db = getDatabase(fbApp);
+  return _db;
+};
 
 /* ── helpers ── */
 const ls = {
@@ -245,8 +250,8 @@ function AppShell({ user }) {
   const [rtdb,setRtdb]=useState(false);
   useEffect(()=>{
     if(!settings.sessionCode)return;
-    const u1=onValue(ref(db,`sessions/${settings.sessionCode}/live`),s=>setLive(s.val()));
-    const u2=onValue(ref(db,".info/connected"),s=>setRtdb(s.val()===true));
+    const u1=onValue(ref(getDB(),`sessions/${settings.sessionCode}/live`),s=>setLive(s.val()));
+    const u2=onValue(ref(getDB(),".info/connected"),s=>setRtdb(s.val()===true));
     return()=>{u1();u2();};
   },[settings.sessionCode]);
 
@@ -273,13 +278,13 @@ function AppShell({ user }) {
   const [triggers,setTriggers]=useState([]);
   useEffect(()=>{
     if(!settings.sessionCode)return;
-    return onValue(ref(db,`sessions/${settings.sessionCode}/triggers`),s=>{
+    return onValue(ref(getDB(),`sessions/${settings.sessionCode}/triggers`),s=>{
       const v=s.val();setTriggers(v?Object.entries(v).map(([id,d])=>({id,...d})):[]);
     });
   },[settings.sessionCode]);
-  const addTr=t=>push(ref(db,`sessions/${settings.sessionCode}/triggers`),{armed:true,...t});
-  const delTr=id=>remove(ref(db,`sessions/${settings.sessionCode}/triggers/${id}`));
-  const togTr=(id,a)=>update(ref(db,`sessions/${settings.sessionCode}/triggers/${id}`),{armed:a});
+  const addTr=t=>push(ref(getDB(),`sessions/${settings.sessionCode}/triggers`),{armed:true,...t});
+  const delTr=id=>remove(ref(getDB(),`sessions/${settings.sessionCode}/triggers/${id}`));
+  const togTr=(id,a)=>update(ref(getDB(),`sessions/${settings.sessionCode}/triggers/${id}`),{armed:a});
 
   /* gamepads */
   const [gamepads,setGamepads]=useState([]);
