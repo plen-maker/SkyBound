@@ -1,34 +1,45 @@
-/* Register this device for FCM push and store the token under the user's session. */
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import { Platform } from "react-native";
-import { doc, setDoc } from "firebase/firestore";
-import { db } from "./firebase";
+import { db, ref, set } from "./firebase";
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false }),
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
 });
 
-export async function registerForPush(uid, deviceName = "phone") {
-  if (!Device.isDevice) { console.warn("[push] needs a physical device"); return null; }
+export async function registerForPush(uid) {
+  if (!Device.isDevice) return null;
 
   const { status: existing } = await Notifications.getPermissionsAsync();
   let status = existing;
-  if (existing !== "granted") status = (await Notifications.requestPermissionsAsync()).status;
-  if (status !== "granted") { console.warn("[push] permission denied"); return null; }
+  if (existing !== "granted") {
+    const { status: newStatus } = await Notifications.requestPermissionsAsync();
+    status = newStatus;
+  }
+  if (status !== "granted") return null;
 
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "SkyBound", importance: Notifications.AndroidImportance.HIGH,
+    await Notifications.setNotificationChannelAsync("skybound", {
+      name: "SkyBound EFB",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#5ec8ff",
     });
   }
 
-  // native FCM/APNs device token (works with the firebase-admin sender in the bridge)
   const token = (await Notifications.getDevicePushTokenAsync()).data;
 
-  await setDoc(doc(db, "sessions", uid, "devices", token.slice(0, 24)), {
-    fcmToken: token, name: deviceName, platform: Platform.OS, boundAt: Date.now(),
-  }, { merge: true });
+  // Store token in Firebase under this user's session
+  const tokenKey = token.slice(0, 24).replace(/[^a-zA-Z0-9]/g, "_");
+  await set(ref(db, `sessions/ddnemet-host/devices/${tokenKey}`), {
+    fcmToken: token,
+    platform: Platform.OS,
+    boundAt: Date.now(),
+  });
 
   return token;
 }
