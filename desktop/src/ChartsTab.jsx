@@ -53,7 +53,8 @@ export default function ChartsTab({ ofp }) {
   }, [ofp]);
 
   const open = (url) => {
-    if (window.skybound?.openInApp) window.skybound.openInApp(url);
+    if (window.sb?.openInApp) window.sb.openInApp(url);
+    else if (window.skybound?.openInApp) window.skybound.openInApp(url);
     else window.open(url, "_blank");
   };
 
