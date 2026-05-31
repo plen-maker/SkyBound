@@ -14,6 +14,8 @@ const OFPTab      = lazy(() => import("./OFPTab.jsx"));
 const VatsimTab   = lazy(() => import("./VatsimTab.jsx"));
 const ChartsTab   = lazy(() => import("./ChartsTab.jsx"));
 
+import UpdateBanner from "./UpdateBanner.jsx";
+
 function TabLoader() {
   return <div style={{ display:"flex",alignItems:"center",justifyContent:"center",height:200,color:"#5a7090",fontSize:13 }}>Betöltés…</div>;
 }
@@ -151,10 +153,25 @@ input:focus,select:focus{border-color:var(--cy)!important;box-shadow:0 0 0 3px r
 .chip{transition:background .12s,color .12s,transform .12s cubic-bezier(.34,1.56,.64,1);cursor:pointer;}
 .chip:hover{transform:scale(1.05);}
 .chip:active{transform:scale(.94);}
+.update-bar{animation:slideDown .35s cubic-bezier(.34,1.2,.64,1);}
+@keyframes slideDown{from{opacity:0;transform:translateY(-100%)}to{opacity:1;transform:none}}
 `;
 
 function AppShell({ user }) {
   const [tab, setTab] = useState("home");
+
+  // ── Auto-updater ──
+  const [updaterState, setUpdaterState] = useState("idle");
+  const [updaterInfo,  setUpdaterInfo]  = useState(null);
+  useEffect(() => {
+    window.skybound?.onUpdater?.((event, data) => {
+      if (event==="available") { setUpdaterState("available"); setUpdaterInfo(data); }
+      if (event==="ready")     { setUpdaterState("ready");     setUpdaterInfo(data); }
+      if (event==="latest")    { setUpdaterState("latest"); setTimeout(()=>setUpdaterState("idle"),3000); }
+      if (event==="checking"||event==="error") setUpdaterState(event==="checking"?"checking":"idle");
+    });
+    setTimeout(() => window.skybound?.checkUpdate?.(), 4000);
+  }, []);
   const [settings, setSettings] = useState(() => ({
     sbUser:"", fenixUrl:"", sessionCode:"ddnemet-host", openLinksInApp:false,
     ...ls.get("sb_settings", {}),
@@ -233,6 +250,41 @@ function AppShell({ user }) {
     <div className="efb" style={{ height:"100vh", display:"flex", flexDirection:"column",
       background:"var(--bg)", overflow:"hidden", fontFamily:"Chivo,sans-serif", color:"var(--tx)" }}>
       <style>{CSS}</style>
+      {/* ── Update banner ── */}
+      {(updaterState==="available"||updaterState==="ready")&&(
+        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",
+          padding:"6px 20px",flexShrink:0,
+          background:updaterState==="ready"?"rgba(82,227,176,.07)":"rgba(255,180,84,.07)",
+          borderBottom:`1px solid ${updaterState==="ready"?"rgba(82,227,176,.2)":"rgba(255,180,84,.2)"}`,
+          animation:"slideDown .35s cubic-bezier(.34,1.2,.64,1)" }}>
+          <span style={{ fontSize:12.5,color:updaterState==="ready"?"var(--gn)":"var(--am)" }}>
+            {updaterState==="ready"
+              ? `✓ ${updaterInfo?.codename} letöltve — készen áll a telepítésre`
+              : `🆕 Új verzió: ${updaterInfo?.codename} (jelenlegi: ${updaterInfo?.current||"?"})`}
+          </span>
+          <div style={{ display:"flex",gap:6 }}>
+            {updaterState==="available"&&(
+              <button onClick={()=>window.skybound?.downloadUpdate?.(updaterInfo?.downloadUrl)}
+                style={{ fontSize:11,fontWeight:600,borderRadius:99,padding:"3px 12px",cursor:"pointer",
+                  border:"1px solid rgba(255,180,84,.4)",background:"rgba(255,180,84,.12)",color:"var(--am)" }}>
+                Letöltés
+              </button>
+            )}
+            {updaterState==="ready"&&(
+              <button onClick={()=>window.skybound?.installUpdate?.()}
+                style={{ fontSize:11,fontWeight:600,borderRadius:99,padding:"3px 12px",cursor:"pointer",
+                  border:"1px solid rgba(82,227,176,.4)",background:"rgba(82,227,176,.12)",color:"var(--gn)" }}>
+                Újraindítás & Telepítés
+              </button>
+            )}
+            <button onClick={()=>window.skybound?.openRelease?.(updaterInfo?.releaseUrl)}
+              style={{ fontSize:11,borderRadius:99,padding:"3px 10px",cursor:"pointer",
+                border:"1px solid var(--line)",background:"var(--p2)",color:"var(--dim)" }}>
+              Release notes
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Titlebar */}
       <div style={{ height:54, display:"flex", alignItems:"center", justifyContent:"space-between",
