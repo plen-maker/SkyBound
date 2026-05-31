@@ -1,6 +1,6 @@
 {
   "name": "skybound-desktop",
-  "version": "0.1.0",
+  "version": "Sequoia",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -29,7 +29,8 @@
         }
       ],
       "category": "public.app-category.utilities",
-      "identity": null
+      "identity": null,
+      "icon": "electron/icon.png"
     },
     "win": {
       "target": [
@@ -39,7 +40,8 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "icon": "electron/icon.png"
     },
     "publish": {
       "provider": "github",

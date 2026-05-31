@@ -250,6 +250,7 @@ function AppShell({ user }) {
     <div className="efb" style={{ height:"100vh", display:"flex", flexDirection:"column",
       background:"var(--bg)", overflow:"hidden", fontFamily:"Chivo,sans-serif", color:"var(--tx)" }}>
       <style>{CSS}</style>
+      <UpdateBanner/>
       {/* ── Update banner ── */}
       {(updaterState==="available"||updaterState==="ready")&&(
         <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",

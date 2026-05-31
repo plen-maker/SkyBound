@@ -1,5 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const { setupUpdater } = require("./updater");
+const { setupUpdater } = require("./updater");
+const { setupUpdater } = require("./updater");
 const path = require("node:path");
 const fs   = require("node:fs");
 const os   = require("node:os");
@@ -109,8 +111,10 @@ ipcMain.handle("settings:load", () => {
 app.whenReady().then(() => {
   createWindow();
   setupUpdater(win);
+  setupUpdater(win);
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  setupUpdater(win);
   });
 });
 
