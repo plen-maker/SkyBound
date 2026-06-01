@@ -27,14 +27,18 @@ const FB = {
   messagingSenderId: "993511543138",
   appId: "1:993511543138:web:ec3a0d3e19713160111c3b",
 };
-const fbApp = getApps().length ? getApps()[0] : initializeApp(FB);
-const auth  = getAuth(fbApp);
-// DB initialized lazily to avoid blocking startup
-let _db = null;
+// Defer Firebase init to next tick so UI renders first
+let fbApp, auth, _db;
+const initFB = () => {
+  if (auth) return;
+  fbApp = getApps().length ? getApps()[0] : initializeApp(FB);
+  auth  = getAuth(fbApp);
+};
 const getDB = () => {
-  if (!_db) _db = getDatabase(fbApp);
+  if (!_db) { initFB(); _db = getDatabase(fbApp); }
   return _db;
 };
+const getAuth_ = () => { initFB(); return auth; };
 
 /* ── helpers ── */
 const ls = {
@@ -115,10 +119,11 @@ function LoginScreen() {
     if (!email || !password) { setErr("Töltsd ki mindkét mezőt."); return; }
     setLoading(true); setErr("");
     try {
+      const a = getAuth_();
       if (mode === "login") {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(a, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        await createUserWithEmailAndPassword(a, email, password);
       }
       ls.set("sb_email", email);
     } catch(e) {
@@ -348,7 +353,7 @@ function AppShell({ user }) {
             <Pill ok={rtdb&&!!live} on={<><Wifi size={11}/>SIM</>} off={<><WifiOff size={11}/>SIM</>}/>
             <div style={{ fontSize:11,color:"var(--dim)",maxWidth:120,overflow:"hidden",
               textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{user.email}</div>
-            <button onClick={()=>signOut(auth)} className="nb"
+            <button onClick={()=>signOut(getAuth_())} className="nb"
               style={{ padding:4,borderRadius:6,color:"var(--dim)",background:"transparent",border:"none" }}
               title="Kijelentkezés"><LogOut size={13}/></button>
           </div>
@@ -370,7 +375,7 @@ function AppShell({ user }) {
               <I size={16}/><span style={{ fontSize:9,letterSpacing:.5,fontWeight:600 }}>{t.label}</span>
             </div>
           );})}
-          <div onClick={()=>signOut(auth)} className="nb"
+          <div onClick={()=>signOut(getAuth_())} className="nb"
             style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:2,
               padding:"8px 0",borderRadius:10,color:"var(--dim)",marginTop:"auto" }}>
             <LogOut size={14}/><span style={{ fontSize:9 }}>Out</span>
@@ -408,7 +413,14 @@ function AppShell({ user }) {
 /* ══ ROOT ════════════════════════════════════════════════════════════════ */
 export default function App() {
   const [user,setUser]=useState(undefined);
-  useEffect(()=>onAuthStateChanged(auth,setUser),[]);
+  useEffect(()=>{
+    // Small delay so UI renders before Firebase connects
+    const t = setTimeout(() => {
+      const unsubscribe = onAuthStateChanged(getAuth_(), setUser);
+      return unsubscribe;
+    }, 50);
+    return () => clearTimeout(t);
+  },[]);
   if(user===undefined)return(
     <div style={{ height:"100vh",background:"#070b12",display:"flex",alignItems:"center",justifyContent:"center" }}>
       <Loader2 size={28} color="#5ec8ff" style={{ animation:"spin 1s linear infinite" }}/>
