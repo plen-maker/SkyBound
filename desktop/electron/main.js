@@ -21,11 +21,13 @@ app.whenReady().then(() => {
     },
   });
 
-  if (process.env.ELECTRON_DEV === "1") {
+  if (!app.isPackaged) {
     win.loadURL("http://localhost:5173");
     win.webContents.openDevTools({ mode: "detach" });
   } else {
-    const distPath = path.resolve(__dirname, "..", "dist", "index.html");
+    // dist is bundled inside app.asar alongside electron/
+    // __dirname = app.asar/electron, dist = app.asar/dist
+    const distPath = path.join(__dirname, "..", "dist", "index.html");
     win.loadFile(distPath);
   }
 
