@@ -9,15 +9,11 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          "firebase": ["firebase/app", "firebase/auth", "firebase/database"],
-          "react":    ["react", "react-dom"],
+          "firebase": ["firebase/app","firebase/auth","firebase/database"],
+          "react":    ["react","react-dom"],
           "lucide":   ["lucide-react"],
         },
       },
     },
-    chunkSizeWarningLimit: 600,
-  },
-  optimizeDeps: {
-    include: ["firebase/app", "firebase/auth", "firebase/database"],
   },
 });

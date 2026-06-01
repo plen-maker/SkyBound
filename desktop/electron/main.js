@@ -1,12 +1,37 @@
-const { app, BrowserWindow, shell, ipcMain } = require("electron");
-const path = require("node:path");
-const fs   = require("node:fs");
-const os   = require("node:os");
+const { app, BrowserWindow, shell, ipcMain, net, protocol } = require("electron");
+const path = require("path");
+const fs   = require("fs");
+const os   = require("os");
 
 const SETTINGS = path.join(os.homedir(), ".skybound.json");
+
+// MUST be before app ready
+protocol.registerSchemesAsPrivileged([{
+  scheme: "skybound",
+  privileges: {
+    secure: true,
+    standard: true,
+    supportFetchAPI: true,
+    corsEnabled: false,
+    stream: true,
+  },
+}]);
+
 let win;
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const DIST = app.isPackaged
+    ? path.join(process.resourcesPath, "app-dist")
+    : path.join(__dirname, "..", "dist");
+
+  // Serve local files via skybound:// protocol
+  protocol.handle("skybound", (req) => {
+    const { pathname } = new URL(req.url);
+    const rel  = pathname === "/" ? "index.html" : pathname.slice(1);
+    const file = path.join(DIST, rel);
+    return net.fetch("file://" + file);
+  });
+
   win = new BrowserWindow({
     width: 1360, height: 860,
     minWidth: 900, minHeight: 600,
@@ -16,24 +41,22 @@ app.whenReady().then(() => {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
-      webSecurity: false,
     },
   });
 
   if (!app.isPackaged) {
-    win.loadURL("http://localhost:5173");
-    win.webContents.openDevTools({ mode: "detach" });
+    // Dev: try Vite first, fallback to built files
+    if (process.env.VITE_DEV === "1") {
+      win.loadURL("http://localhost:5173");
+      win.webContents.openDevTools({ mode: "detach" });
+    } else {
+      win.loadURL("skybound://app/");
+    }
   } else {
-    // dist is bundled inside app.asar alongside electron/
-    // __dirname = app.asar/electron, dist = app.asar/dist
-    const distPath = path.join(__dirname, "..", "dist", "index.html");
-    win.loadFile(distPath);
+    win.loadURL("skybound://app/");
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.includes("accounts.google.com") || url.includes("firebaseapp.com/__/auth"))
-      return { action: "allow" };
     shell.openExternal(url);
     return { action: "deny" };
   });
@@ -50,64 +73,48 @@ app.on("window-all-closed", () => {
 /* ── IPC ── */
 ipcMain.handle("open:external", (_e, url) => shell.openExternal(url));
 
-let browserWin = null;
+let bwin = null;
 ipcMain.handle("open:inapp", (_e, url) => {
-  if (browserWin && !browserWin.isDestroyed()) {
-    browserWin.loadURL(url); browserWin.focus(); return;
-  }
-  browserWin = new BrowserWindow({
-    width: 1280, height: 840, backgroundColor: "#070b12",
-    titleBarStyle: "hidden",
-    webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: false },
+  if (bwin && !bwin.isDestroyed()) { bwin.loadURL(url); bwin.focus(); return; }
+  bwin = new BrowserWindow({
+    width:1280, height:840, backgroundColor:"#070b12", titleBarStyle:"hidden",
+    webPreferences:{ nodeIntegration:false, contextIsolation:true },
   });
-  browserWin.loadURL(url);
-  browserWin.on("closed", () => { browserWin = null; });
-  const injectNav = () => {
-    browserWin.webContents.executeJavaScript(`
-      if (!document.getElementById('sb-nav')) {
-        const bar = document.createElement("div");
-        bar.id = "sb-nav";
-        bar.style.cssText = "position:fixed;top:0;left:0;right:0;height:40px;background:#0d1520;display:flex;align-items:center;gap:6px;padding:0 14px;z-index:2147483647;border-bottom:1px solid #1a2a3d;-webkit-app-region:drag;font-family:system-ui;";
-        const mk = (label, fn) => {
-          const b = document.createElement("button");
-          b.textContent = label;
-          b.style.cssText = "background:#111c2b;color:#cdd9ec;border:1px solid #1a2a3d;border-radius:7px;padding:3px 10px;font-size:12px;cursor:pointer;-webkit-app-region:no-drag;";
-          b.onmouseenter = () => b.style.background="#1a2a3d";
-          b.onmouseleave = () => b.style.background="#111c2b";
-          b.onclick = fn; return b;
-        };
-        bar.appendChild(mk("←", () => history.back()));
-        bar.appendChild(mk("→", () => history.forward()));
-        bar.appendChild(mk("↺", () => location.reload()));
-        const u = document.createElement("div");
-        u.style.cssText = "flex:1;color:#5a7090;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;-webkit-app-region:drag;margin:0 8px;";
-        u.textContent = location.hostname;
-        bar.appendChild(u);
-        bar.appendChild(mk("✕ Bezár", () => window.close()));
-        document.documentElement.style.paddingTop = "40px";
-        document.body.prepend(bar);
-      }
-    `).catch(()=>{});
-  };
-  browserWin.webContents.on("did-finish-load", injectNav);
-  browserWin.webContents.on("did-navigate-in-page", injectNav);
+  bwin.loadURL(url);
+  bwin.on("closed", ()=>{ bwin=null; });
+  const nav = () => bwin.webContents.executeJavaScript(`
+    if(!document.getElementById('sb-nav')){
+      const b=document.createElement('div');b.id='sb-nav';
+      b.style.cssText='position:fixed;top:0;left:0;right:0;height:40px;background:#0d1520;display:flex;align-items:center;gap:6px;padding:0 14px;z-index:2147483647;border-bottom:1px solid #1a2a3d;-webkit-app-region:drag;font-family:system-ui;';
+      const mk=(t,fn)=>{const x=document.createElement('button');x.textContent=t;x.style.cssText='background:#111c2b;color:#cdd9ec;border:1px solid #1a2a3d;border-radius:7px;padding:3px 10px;font-size:12px;cursor:pointer;-webkit-app-region:no-drag;';x.onclick=fn;return x;};
+      b.appendChild(mk('←',()=>history.back()));
+      b.appendChild(mk('→',()=>history.forward()));
+      b.appendChild(mk('↺',()=>location.reload()));
+      const u=document.createElement('div');u.style.cssText='flex:1;color:#5a7090;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;-webkit-app-region:drag;margin:0 8px;';u.textContent=location.hostname;
+      b.appendChild(u);
+      b.appendChild(mk('✕ Bezár',()=>window.close()));
+      document.documentElement.style.paddingTop='40px';
+      document.body.prepend(b);
+    }
+  `).catch(()=>{});
+  bwin.webContents.on("did-finish-load", nav);
+  bwin.webContents.on("did-navigate-in-page", nav);
 });
 
-ipcMain.handle("settings:save", (_e, s) => { fs.writeFileSync(SETTINGS, JSON.stringify(s,null,2)); return true; });
-ipcMain.handle("settings:load", () => { try { return JSON.parse(fs.readFileSync(SETTINGS,"utf8")); } catch { return {}; } });
+ipcMain.handle("settings:save", (_e,s) => { fs.writeFileSync(SETTINGS,JSON.stringify(s,null,2)); return true; });
+ipcMain.handle("settings:load", ()=>{ try{return JSON.parse(fs.readFileSync(SETTINGS,"utf8"));}catch{return{};} });
 
-/* ── SimBrief ── */
-const n   = v => v==null||v===""?null:Number(v);
-const toA = x => Array.isArray(x)?x:x?[x]:[];
-ipcMain.handle("simbrief:fetch", async (_e, username) => {
-  if (!username) return { error: "Nincs usernév" };
-  try {
-    const r = await fetch(`https://www.simbrief.com/api/xml.fetcher.php?username=${encodeURIComponent(username)}&json=1`);
-    if (!r.ok) return { error: `HTTP ${r.status}` };
-    const d = await r.json();
-    if (d?.fetch?.status==="Error") return { error: d.fetch.message };
+const n=v=>v==null||v===""?null:Number(v);
+const toA=x=>Array.isArray(x)?x:x?[x]:[];
+ipcMain.handle("simbrief:fetch", async(_e,username)=>{
+  if(!username) return{error:"Nincs usernév"};
+  try{
+    const r=await fetch(`https://www.simbrief.com/api/xml.fetcher.php?username=${encodeURIComponent(username)}&json=1`);
+    if(!r.ok) return{error:`HTTP ${r.status}`};
+    const d=await r.json();
+    if(d?.fetch?.status==="Error") return{error:d.fetch.message};
     const w=d.weights||{},f=d.fuel||{},g=d.general||{},t=d.times||{};
-    return { ofp: {
+    return{ofp:{
       dep:d?.origin?.icao_code, arr:d?.destination?.icao_code, altn:d?.alternate?.icao_code,
       aircraft:`${d?.aircraft?.icaocode||""} ${d?.aircraft?.name||""}`.trim(),
       units:w.units||"kg", pax:n(w.pax_count), payload:n(w.payload),
@@ -119,26 +126,22 @@ ipcMain.handle("simbrief:fetch", async (_e, username) => {
       ete:t.est_time_enroute?`${Math.floor(n(t.est_time_enroute)/3600)}h${String(Math.floor((n(t.est_time_enroute)%3600)/60)).padStart(2,"0")}m`:null,
       fixes:toA(d?.navlog?.fix).map(x=>({ident:x.ident,stage:x.stage,lat:n(x.pos_lat),lon:n(x.pos_long),altitude:n(x.altitude_feet)})).filter(x=>x.ident&&x.lat!=null),
     }};
-  } catch(e) { return { error: String(e) }; }
+  }catch(e){return{error:String(e)};}
 });
 
-/* ── Updater ── */
-ipcMain.handle("updater:check", async () => {
-  try {
-    const r = await fetch("https://api.github.com/repos/plen-maker/SkyBound/releases/latest",
-      { headers: { "User-Agent":`SkyBound/${app.getVersion()}`, "Accept":"application/vnd.github+json" } });
-    if (!r.ok) return { error:`HTTP ${r.status}` };
-    const rel = await r.json();
-    const latest  = (rel.tag_name||rel.name||"").replace(/^v/i,"").trim().toLowerCase();
-    const current = app.getVersion().toLowerCase();
-    if (latest && latest !== current) {
-      const asset = (rel.assets||[]).find(a => {
-        const nm = a.name.toLowerCase();
-        return process.platform==="darwin"?nm.endsWith(".dmg"):nm.includes("setup")||nm.endsWith(".exe");
-      });
-      return { update:true, codename:rel.tag_name||rel.name, url:rel.html_url, downloadUrl:asset?.browser_download_url||null };
+ipcMain.handle("updater:check", async()=>{
+  try{
+    const r=await fetch("https://api.github.com/repos/plen-maker/SkyBound/releases/latest",
+      {headers:{"User-Agent":`SkyBound/${app.getVersion()}`,"Accept":"application/vnd.github+json"}});
+    if(!r.ok) return{error:`HTTP ${r.status}`};
+    const rel=await r.json();
+    const latest=(rel.tag_name||rel.name||"").replace(/^v/i,"").trim().toLowerCase();
+    const current=app.getVersion().toLowerCase();
+    if(latest&&latest!==current){
+      const asset=(rel.assets||[]).find(a=>{const nm=a.name.toLowerCase();return process.platform==="darwin"?nm.endsWith(".dmg"):nm.includes("setup")||nm.endsWith(".exe");});
+      return{update:true,codename:rel.tag_name||rel.name,url:rel.html_url,downloadUrl:asset?.browser_download_url||null};
     }
-    return { update: false };
-  } catch(e) { return { error: String(e) }; }
+    return{update:false};
+  }catch(e){return{error:String(e)};}
 });
-ipcMain.handle("updater:open", (_e, url) => shell.openExternal(url||"https://github.com/plen-maker/SkyBound/releases/latest"));
+ipcMain.handle("updater:open",(_e,url)=>shell.openExternal(url||"https://github.com/plen-maker/SkyBound/releases/latest"));

@@ -1,64 +1,37 @@
 {
   "name": "skybound-desktop",
   "version": "0.3.0",
-  "description": "SkyBound EFB \u2014 Electronic Flight Bag for MSFS",
+  "codename": "Sequoia",
+  "description": "SkyBound EFB — Electronic Flight Bag for MSFS",
   "author": "plen-maker",
   "private": true,
   "main": "electron/main.js",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/plen-maker/SkyBound.git"
-  },
+  "repository": { "type": "git", "url": "https://github.com/plen-maker/SkyBound.git" },
   "scripts": {
-    "dev": "NODE_ENV=development concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "build": "vite build",
+    "dev":      "VITE_DEV=1 concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "preview":  "vite build && npx electron .",
+    "build":    "vite build",
     "dist:mac": "vite build && electron-builder --mac dmg --universal --publish never",
     "dist:win": "vite build && electron-builder --win nsis --publish never"
   },
   "build": {
     "appId": "cx.skybound.efb",
     "productName": "SkyBound EFB",
-    "files": [
-      "dist/**/*",
-      "electron/**/*"
-    ],
-    "directories": {
-      "output": "release"
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "plen-maker",
-      "repo": "SkyBound"
-    },
+    "asar": true,
+    "files": ["electron/**/*"],
+    "extraResources": [{ "from": "dist", "to": "app-dist" }],
+    "directories": { "output": "release" },
+    "publish": { "provider": "github", "owner": "plen-maker", "repo": "SkyBound" },
     "mac": {
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "universal"
-          ]
-        }
-      ],
+      "target": [{ "target": "dmg", "arch": ["universal"] }],
       "category": "public.app-category.utilities",
       "identity": null,
       "icon": "electron/icon.png"
     },
     "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
       "icon": "electron/icon.png"
-    },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": false
-    },
-    "asar": true
+    }
   },
   "dependencies": {
     "firebase": "^10.12.0",
@@ -75,6 +48,5 @@
     "tailwindcss": "^4.0.0",
     "vite": "^6.0.0",
     "wait-on": "^8.0.1"
-  },
-  "codename": "Sequoia"
+  }
 }
