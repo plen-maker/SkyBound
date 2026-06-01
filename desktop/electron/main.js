@@ -25,7 +25,16 @@ app.whenReady().then(() => {
     win.loadURL("http://localhost:5173");
     win.webContents.openDevTools({ mode: "detach" });
   } else {
-    win.loadFile(path.join(app.getAppPath(), "dist", "index.html"));
+    // In packaged app, __dirname points inside asar, use app.getAppPath()
+    const indexHtml = path.join(app.getAppPath(), "dist", "index.html");
+    console.log("[load] trying:", indexHtml);
+    win.loadFile(indexHtml).catch(err => {
+      console.error("[load] failed:", err);
+      // Fallback: try relative to __dirname
+      const fallback = path.join(__dirname, "..", "dist", "index.html");
+      console.log("[load] fallback:", fallback);
+      win.loadFile(fallback);
+    });
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {

@@ -57,7 +57,8 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false
-    }
+    },
+    "asar": true
   },
   "dependencies": {
     "firebase": "^10.12.0",
