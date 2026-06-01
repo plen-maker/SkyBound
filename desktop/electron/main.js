@@ -21,11 +21,11 @@ app.whenReady().then(() => {
     },
   });
 
-  if (!app.isPackaged) {
+  if (process.env.ELECTRON_DEV === "1") {
     win.loadURL("http://localhost:5173");
     win.webContents.openDevTools({ mode: "detach" });
   } else {
-    const distPath = path.join(process.resourcesPath, "dist", "index.html");
+    const distPath = path.resolve(__dirname, "..", "dist", "index.html");
     win.loadFile(distPath);
   }
 
