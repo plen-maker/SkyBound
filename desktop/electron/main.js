@@ -1,14 +1,29 @@
-const { app, BrowserWindow, shell, ipcMain } = require("electron");
+const { app, BrowserWindow, shell, ipcMain, protocol } = require("electron");
 const path = require("node:path");
 const fs   = require("node:fs");
 const os   = require("node:os");
 
-const isDev     = !app.isPackaged;
-const SETTINGS  = path.join(os.homedir(), ".skybound.json");
+const SETTINGS = path.join(os.homedir(), ".skybound.json");
+
+// Must be called before app is ready
+protocol.registerSchemesAsPrivileged([{
+  scheme: "app",
+  privileges: { secure: true, standard: true, supportFetchAPI: true, corsEnabled: true },
+}]);
 
 let win;
 
 app.whenReady().then(() => {
+  // Serve dist/ via app:// protocol (packaged build)
+  protocol.handle("app", (request) => {
+    const url  = new URL(request.url);
+    let   rel  = url.pathname === "/" ? "/index.html" : url.pathname;
+    const file = path.join(process.resourcesPath, "dist", rel);
+    return new Response(fs.readFileSync(file), {
+      headers: { "Content-Type": mime(rel) },
+    });
+  });
+
   win = new BrowserWindow({
     width: 1360, height: 860,
     minWidth: 900, minHeight: 600,
@@ -21,22 +36,16 @@ app.whenReady().then(() => {
     },
   });
 
-  if (isDev) {
+  if (!app.isPackaged) {
     win.loadURL("http://localhost:5173");
     win.webContents.openDevTools({ mode: "detach" });
   } else {
-    // packaged: dist is in Resources/dist via extraResources
-    const indexHtml = app.isPackaged
-      ? path.join(process.resourcesPath, "dist", "index.html")
-      : path.join(app.getAppPath(), "dist", "index.html");
-    win.loadFile(indexHtml);
+    win.loadURL("app://./index.html");
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.includes("accounts.google.com") ||
-        url.includes("firebaseapp.com/__/auth")) {
+    if (url.includes("accounts.google.com") || url.includes("firebaseapp.com/__/auth"))
       return { action: "allow" };
-    }
     shell.openExternal(url);
     return { action: "deny" };
   });
@@ -50,25 +59,30 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
+function mime(file) {
+  if (file.endsWith(".html")) return "text/html";
+  if (file.endsWith(".js"))   return "application/javascript";
+  if (file.endsWith(".css"))  return "text/css";
+  if (file.endsWith(".png"))  return "image/png";
+  if (file.endsWith(".svg"))  return "image/svg+xml";
+  return "application/octet-stream";
+}
+
 /* ── IPC ── */
 ipcMain.handle("open:external", (_e, url) => shell.openExternal(url));
+
 let browserWin = null;
 ipcMain.handle("open:inapp", (_e, url) => {
-  // reuse single window
   if (browserWin && !browserWin.isDestroyed()) {
-    browserWin.loadURL(url);
-    browserWin.focus();
-    return;
+    browserWin.loadURL(url); browserWin.focus(); return;
   }
   browserWin = new BrowserWindow({
-    width: 1280, height: 840,
-    backgroundColor: "#070b12",
+    width: 1280, height: 840, backgroundColor: "#070b12",
     titleBarStyle: "hidden",
     webPreferences: { nodeIntegration: false, contextIsolation: true },
   });
   browserWin.loadURL(url);
   browserWin.on("closed", () => { browserWin = null; });
-
   const injectNav = () => {
     browserWin.webContents.executeJavaScript(`
       if (!document.getElementById('sb-nav')) {
@@ -99,76 +113,53 @@ ipcMain.handle("open:inapp", (_e, url) => {
   browserWin.webContents.on("did-finish-load", injectNav);
   browserWin.webContents.on("did-navigate-in-page", injectNav);
 });
-ipcMain.handle("settings:save", (_e, s) => {
-  fs.writeFileSync(SETTINGS, JSON.stringify(s, null, 2));
-  return true;
-});
-ipcMain.handle("settings:load", () => {
-  try { return JSON.parse(fs.readFileSync(SETTINGS, "utf8")); }
-  catch { return {}; }
-});
 
-/* ── SimBrief (no CORS in Node) ── */
-const n = v => v == null || v === "" ? null : Number(v);
-const toA = x => Array.isArray(x) ? x : x ? [x] : [];
+ipcMain.handle("settings:save", (_e, s) => { fs.writeFileSync(SETTINGS, JSON.stringify(s,null,2)); return true; });
+ipcMain.handle("settings:load", () => { try { return JSON.parse(fs.readFileSync(SETTINGS,"utf8")); } catch { return {}; } });
+
+/* ── SimBrief ── */
+const n   = v => v==null||v===""?null:Number(v);
+const toA = x => Array.isArray(x)?x:x?[x]:[];
 ipcMain.handle("simbrief:fetch", async (_e, username) => {
   if (!username) return { error: "Nincs usernév" };
   try {
-    const r = await fetch(
-      `https://www.simbrief.com/api/xml.fetcher.php?username=${encodeURIComponent(username)}&json=1`
-    );
+    const r = await fetch(`https://www.simbrief.com/api/xml.fetcher.php?username=${encodeURIComponent(username)}&json=1`);
     if (!r.ok) return { error: `HTTP ${r.status}` };
     const d = await r.json();
-    if (d?.fetch?.status === "Error") return { error: d.fetch.message };
-    const w=d.weights||{}, f=d.fuel||{}, g=d.general||{}, t=d.times||{};
+    if (d?.fetch?.status==="Error") return { error: d.fetch.message };
+    const w=d.weights||{},f=d.fuel||{},g=d.general||{},t=d.times||{};
     return { ofp: {
-      dep: d?.origin?.icao_code, arr: d?.destination?.icao_code,
-      altn: d?.alternate?.icao_code,
-      aircraft: `${d?.aircraft?.icaocode||""} ${d?.aircraft?.name||""}`.trim(),
-      units: w.units||"kg",
-      pax: n(w.pax_count), payload: n(w.payload),
-      zfw: n(w.est_zfw), tow: n(w.est_tow),
-      blockFuel: n(f.plan_ramp), enrouteBurn: n(f.enroute_burn),
-      contFuel: n(f.contingency), altFuel: n(f.alternate_burn),
-      resFuel: n(f.reserve), extraFuel: n(f.extra),
-      costindex: n(g.costindex), route: g.route,
-      routeDistanceNm: n(g.route_distance)||n(g.air_distance),
-      ete: t.est_time_enroute
-        ? `${Math.floor(n(t.est_time_enroute)/3600)}h${String(Math.floor((n(t.est_time_enroute)%3600)/60)).padStart(2,"0")}m`
-        : null,
-      fixes: toA(d?.navlog?.fix).map(x=>({
-        ident:x.ident, stage:x.stage,
-        lat:n(x.pos_lat), lon:n(x.pos_long), altitude:n(x.altitude_feet),
-      })).filter(x=>x.ident&&x.lat!=null),
+      dep:d?.origin?.icao_code, arr:d?.destination?.icao_code, altn:d?.alternate?.icao_code,
+      aircraft:`${d?.aircraft?.icaocode||""} ${d?.aircraft?.name||""}`.trim(),
+      units:w.units||"kg", pax:n(w.pax_count), payload:n(w.payload),
+      zfw:n(w.est_zfw), tow:n(w.est_tow), blockFuel:n(f.plan_ramp),
+      enrouteBurn:n(f.enroute_burn), contFuel:n(f.contingency),
+      altFuel:n(f.alternate_burn), resFuel:n(f.reserve), extraFuel:n(f.extra),
+      costindex:n(g.costindex), route:g.route,
+      routeDistanceNm:n(g.route_distance)||n(g.air_distance),
+      ete:t.est_time_enroute?`${Math.floor(n(t.est_time_enroute)/3600)}h${String(Math.floor((n(t.est_time_enroute)%3600)/60)).padStart(2,"0")}m`:null,
+      fixes:toA(d?.navlog?.fix).map(x=>({ident:x.ident,stage:x.stage,lat:n(x.pos_lat),lon:n(x.pos_long),altitude:n(x.altitude_feet)})).filter(x=>x.ident&&x.lat!=null),
     }};
   } catch(e) { return { error: String(e) }; }
 });
 
-/* ── GitHub update check ── */
+/* ── Updater ── */
 ipcMain.handle("updater:check", async () => {
   try {
-    const r = await fetch(
-      "https://api.github.com/repos/plen-maker/SkyBound/releases/latest",
-      { headers: { "User-Agent": `SkyBound/${app.getVersion()}`,
-                   "Accept": "application/vnd.github+json" } }
-    );
-    if (!r.ok) return { error: `HTTP ${r.status}` };
+    const r = await fetch("https://api.github.com/repos/plen-maker/SkyBound/releases/latest",
+      { headers: { "User-Agent":`SkyBound/${app.getVersion()}`, "Accept":"application/vnd.github+json" } });
+    if (!r.ok) return { error:`HTTP ${r.status}` };
     const rel = await r.json();
     const latest  = (rel.tag_name||rel.name||"").replace(/^v/i,"").trim().toLowerCase();
     const current = app.getVersion().toLowerCase();
     if (latest && latest !== current) {
       const asset = (rel.assets||[]).find(a => {
         const nm = a.name.toLowerCase();
-        return process.platform==="darwin" ? nm.endsWith(".dmg")
-             : process.platform==="win32"  ? nm.includes("setup")||nm.endsWith(".exe")
-             : false;
+        return process.platform==="darwin"?nm.endsWith(".dmg"):process.platform==="win32"?nm.includes("setup")||nm.endsWith(".exe"):false;
       });
-      return { update: true, codename: rel.tag_name||rel.name,
-               url: rel.html_url, downloadUrl: asset?.browser_download_url||null };
+      return { update:true, codename:rel.tag_name||rel.name, url:rel.html_url, downloadUrl:asset?.browser_download_url||null };
     }
     return { update: false };
   } catch(e) { return { error: String(e) }; }
 });
-ipcMain.handle("updater:open", (_e, url) =>
-  shell.openExternal(url || "https://github.com/plen-maker/SkyBound/releases/latest")
-);
+ipcMain.handle("updater:open", (_e, url) => shell.openExternal(url||"https://github.com/plen-maker/SkyBound/releases/latest"));
