@@ -19,7 +19,6 @@
     "appId": "cx.skybound.efb",
     "productName": "SkyBound EFB",
     "files": [
-      "dist/**/*",
       "electron/**/*"
     ],
     "directories": {
@@ -58,7 +57,13 @@
       "oneClick": true,
       "perMachine": false
     },
-    "asar": true
+    "asar": true,
+    "extraResources": [
+      {
+        "from": "dist",
+        "to": "dist"
+      }
+    ]
   },
   "dependencies": {
     "firebase": "^10.12.0",
