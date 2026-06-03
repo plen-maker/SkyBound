@@ -7,3 +7,5 @@ serviceAccount.json
 .DS_Store
 node_modules/
 desktop/ui/dist/
+desktop/src-tauri/target/
+mobile/node_modules/
