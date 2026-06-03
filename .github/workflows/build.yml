@@ -2,7 +2,7 @@ name: SkyBound — Build & Release
 
 on:
   push:
-    tags: ["*"]
+    branches: ["main", "dev"]
   workflow_dispatch:
 
 permissions:
@@ -94,18 +94,40 @@ jobs:
   release:
     needs: [desktop-win, mobile-apk]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.ref_name == 'main' || github.ref_name == 'dev'
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - uses: softprops/action-gh-release@v2
-        with:
-          name: "Axesta ${{ github.ref_name }}"
-          files: |
-            artifacts/axesta-win/Axesta.exe
-            artifacts/skybound-apk/SkyBound.apk
-          generate_release_notes: true
+      - name: Prepare release files
+        run: |
+          mkdir -p release-assets
+          if [ "${{ github.ref_name }}" = "dev" ]; then
+            cp artifacts/axesta-win/Axesta.exe release-assets/Axesta-dev.exe
+            cp artifacts/skybound-apk/SkyBound.apk release-assets/SkyBound-dev.apk
+          else
+            cp artifacts/axesta-win/Axesta.exe release-assets/Axesta.exe
+            cp artifacts/skybound-apk/SkyBound.apk release-assets/SkyBound.apk
+          fi
+
+      - name: Upload to latest release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ "${{ github.ref_name }}" = "dev" ]; then
+            TAG="$(gh api "repos/$GH_REPO/releases" --jq 'map(select(.draft == false and .prerelease == true))[0].tag_name // empty')"
+            if [ -z "$TAG" ]; then
+              echo "No published prerelease found for the dev channel. Create a prerelease in GitHub first."
+              exit 1
+            fi
+          else
+            TAG="$(gh api "repos/$GH_REPO/releases/latest" --jq '.tag_name')"
+            if [ -z "$TAG" ]; then
+              echo "No latest release found for the main channel. Create a normal release in GitHub first."
+              exit 1
+            fi
+          fi
+
+          gh release upload "$TAG" release-assets/* --clobber
