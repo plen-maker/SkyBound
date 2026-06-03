@@ -1,72 +1,120 @@
-name: SkyBound EFB — Build & Release
+name: SkyBound — Build & Release
 
 on:
   push:
-    branches: [main]
     tags: ["*"]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  # ── macOS DMG ─────────────────────────────────────────────────────────────
-  build-mac:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm install
-        working-directory: desktop
-      - name: Build DMG (no publish)
-        run: npx electron-builder --mac dmg --universal --publish never
-        working-directory: desktop
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mac-dmg
-          path: desktop/release/*.dmg
 
-  # ── Windows EXE ───────────────────────────────────────────────────────────
-  build-win:
+  # ── Windows .exe ─────────────────────────────────────────────────
+  desktop-win:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install pywebview flask flask-cors requests pyinstaller pywin32 pythonnet
+
+      - name: Build EXE
+        run: |
+          pyinstaller --onefile --windowed ^
+            --name "Axesta" ^
+            --add-data "desktop\ui;ui" ^
+            --add-data "desktop\version.json;." ^
+            --hidden-import flask ^
+            --hidden-import flask_cors ^
+            --hidden-import webview ^
+            --hidden-import webview.platforms.winforms ^
+            --hidden-import clr ^
+            desktop\main.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: axesta-win
+          path: dist/Axesta.exe
+
+  # ── Android APK ──────────────────────────────────────────────────
+  mobile-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
-        working-directory: desktop
-      - name: Build EXE (no publish)
-        run: npx electron-builder --win nsis --publish never
-        working-directory: desktop
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install mobile deps
+        working-directory: mobile
+        run: npm install
+
+      - name: Build React
+        working-directory: mobile
+        run: npm run build
+
+      - name: Capacitor sync
+        working-directory: mobile
+        run: npx cap sync android
+
+      - name: Build APK
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign
+        with:
+          releaseDirectory: mobile/android/app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        continue-on-error: true
+
+      - name: Copy unsigned if sign failed
+        if: steps.sign.outcome == 'failure'
+        run: cp mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk mobile/android/app/build/outputs/apk/release/SkyBound.apk
+
+      - name: Rename signed APK
+        if: steps.sign.outcome == 'success'
+        run: mv ${{ steps.sign.outputs.signedReleaseFile }} mobile/android/app/build/outputs/apk/release/SkyBound.apk
+
       - uses: actions/upload-artifact@v4
         with:
-          name: win-exe
-          path: desktop/release/*.exe
+          name: skybound-apk
+          path: mobile/android/app/build/outputs/apk/release/SkyBound.apk
 
-  # ── GitHub Release (csak tag-re) ──────────────────────────────────────────
+  # ── GitHub Release ───────────────────────────────────────────────
   release:
-    needs: [build-mac, build-win]
+    needs: [desktop-win, mobile-apk]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+
+      - uses: softprops/action-gh-release@v2
         with:
+          name: "Axesta ${{ github.ref_name }}"
           files: |
-            artifacts/mac-dmg/*.dmg
-            artifacts/win-exe/*.exe
+            artifacts/axesta-win/Axesta.exe
+            artifacts/skybound-apk/SkyBound.apk
           generate_release_notes: true
-          prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,15 +1,10 @@
 {
   "name": "skybound-desktop",
-  "version": "0.3.0",
-  "codename": "Sequoia",
-  "description": "SkyBound EFB — Electronic Flight Bag for MSFS",
-  "author": "plen-maker",
+  "version": "0.1.0",
   "private": true,
   "main": "electron/main.js",
-  "repository": { "type": "git", "url": "https://github.com/plen-maker/SkyBound.git" },
   "scripts": {
-    "dev":      "VITE_DEV=1 concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "preview":  "vite build && npx electron .",
+    "dev":      "NODE_ENV=development concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
     "build":    "vite build",
     "dist:mac": "vite build && electron-builder --mac dmg --universal --publish never",
     "dist:win": "vite build && electron-builder --win nsis --publish never"
@@ -17,23 +12,19 @@
   "build": {
     "appId": "cx.skybound.efb",
     "productName": "SkyBound EFB",
-    "asar": true,
-    "files": ["electron/**/*"],
-    "extraResources": [{ "from": "dist", "to": "app-dist" }],
+    "files": ["dist/**/*", "electron/**/*"],
     "directories": { "output": "release" },
-    "publish": { "provider": "github", "owner": "plen-maker", "repo": "SkyBound" },
     "mac": {
       "target": [{ "target": "dmg", "arch": ["universal"] }],
       "category": "public.app-category.utilities",
-      "identity": null,
-      "icon": "electron/icon.png"
+      "identity": null
     },
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
-      "icon": "electron/icon.png"
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
     }
   },
   "dependencies": {
+    "electron-updater": "^6.3.9",
     "firebase": "^10.12.0",
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",
