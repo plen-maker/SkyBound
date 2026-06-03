@@ -5,3 +5,5 @@ release/
 serviceAccount.json
 *.plist
 .DS_Store
+node_modules/
+desktop/ui/dist/
