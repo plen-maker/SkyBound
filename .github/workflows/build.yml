@@ -25,16 +25,7 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller --onefile --windowed ^
-            --name "Axesta" ^
-            --add-data "desktop\ui;ui" ^
-            --add-data "desktop\version.json;." ^
-            --hidden-import flask ^
-            --hidden-import flask_cors ^
-            --hidden-import webview ^
-            --hidden-import webview.platforms.winforms ^
-            --hidden-import clr ^
-            desktop\main.py
+          pyinstaller --onefile --windowed --name "Axesta" --add-data "desktop\ui;ui" --add-data "desktop\version.json;." --hidden-import flask --hidden-import flask_cors --hidden-import webview --hidden-import webview.platforms.winforms --hidden-import clr desktop\main.py
 
       - uses: actions/upload-artifact@v4
         with:
