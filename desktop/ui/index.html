@@ -296,7 +296,12 @@ const api=(p,o={})=>fetch(p,o).then(r=>r.json()).catch(e=>({error:e.message}));
 const fmt=(v,u="")=>v==null?"—":`${typeof v==="number"?Math.round(v).toLocaleString("hu"):v}${u?" "+u:""}`;
 const el=(t,c)=>{const e=document.createElement(t);if(c)e.className=c;return e;};
 
+const IFRAME_BLOCKED=["music.youtube.com","discord.com","open.spotify.com","youtube.com","twitter.com","instagram.com"];
 function openBrowser(url){
+  const blocked=IFRAME_BLOCKED.some(d=>url.includes(d));
+  if(blocked||S.cfg.openLinksInApp===false){
+    window.open(url,"_blank"); return;
+  }
   $("brFrame").src=url; $("brUrl").textContent=url;
   $("browser").classList.add("open");
 }
@@ -424,7 +429,7 @@ function renderHome(m){
   });
   m.appendChild(sg);
   const slb=el("div","sl");slb.textContent="Shortcuts";m.appendChild(slb);
-  const grid=el("div","g4");grid.style.marginBottom="14px";
+  const cols=S.cfg.layout==="2"?"g2":"g4";const grid=el("div",cols);grid.style.marginBottom="14px";
   SC.forEach(s=>{
     const url=s.uk?cfg[s.uk]:s.url,dis=s.uk&&!url;
     const tile=el("button","tile");tile.style.opacity=dis?"0.4":"1";if(dis)tile.disabled=true;
@@ -714,7 +719,7 @@ function renderSettings(m){
    ["green","#060e09","#33e899"],["amber","#0e0a04","#ffaa22"],["light","#eef2f8","#0880c0"]].forEach(([v,bg,ac])=>{
     const s=el("button","swatch"+(cfg.theme===v?" on":""));s.title=v;
     s.style.cssText=`background:linear-gradient(135deg,${bg} 50%,${ac} 50%);border:${cfg.theme===v?"3px solid "+ac:"2px solid var(--line)"};box-shadow:${cfg.theme===v?"0 0 7px "+ac+"66":"none"}`;
-    s.addEventListener("click",()=>{S.cfg.theme=v;applyTheme(v);saveCfg();renderSettings(m);});sw.appendChild(s);
+    s.addEventListener("click",()=>{S.cfg.theme=v;applyTheme(v);saveCfg();if(S.tab==="settings")renderTab();});sw.appendChild(s);
   });
   srow("Téma","",sw);
 
@@ -737,7 +742,7 @@ function renderSettings(m){
   const omRow=el("div","flex gap6");
   [["simplified","Simplified"],["realistic","Realistic"]].forEach(([v,l])=>{
     const b=el("button","pill"+(cfg.ofpMode===v?" on":""));b.textContent=l;
-    b.addEventListener("click",()=>{S.cfg.ofpMode=v;saveCfg();renderSettings(m);});omRow.appendChild(b);
+    b.addEventListener("click",()=>{S.cfg.ofpMode=v;saveCfg();if(S.tab==="settings")renderTab();});omRow.appendChild(b);
   });
   srow("OFP megjelenítés","",omRow);
 
@@ -752,11 +757,19 @@ function renderSettings(m){
   const saveB=el("button","btn btn-cy");saveB.style.cssText="font-size:11px;padding:6px 12px;align-self:flex-end";saveB.textContent="Mentés";
   saveB.addEventListener("click",async()=>{
     await api("/api/version",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({codename:cnI.value,channel:chS.value})});
-    S.ver=await api("/api/version");renderSettings(m);
+    S.ver=await api("/api/version");if(S.tab==="settings")renderTab();
   });
   dr.appendChild(cnI);dr.appendChild(chS);dr.appendChild(saveB);devPanel.appendChild(dr);
   devBtn.addEventListener("click",()=>{devPanel.style.display=devPanel.style.display==="none"?"block":"none";});
   verRow.appendChild(devBtn);srow("Verzió","",verRow);m.appendChild(devPanel);
+
+  // Layout toggle
+  const lyRow=el("div","flex gap6");
+  [["1","1 oszlop"],["2","2 oszlop"]].forEach(([v,l])=>{
+    const b=el("button","pill"+(( cfg.layout||"1")===v?" on":""));b.textContent=l;
+    b.addEventListener("click",()=>{S.cfg.layout=v;saveCfg();if(S.tab==="settings")renderTab();});lyRow.appendChild(b);
+  });
+  srow("Elrendezés","Shortcut grid oszlopszám",lyRow);
 }
 
 // ── Login ──────────────────────────────────────────────────────────
