@@ -22,17 +22,7 @@ jobs:
         run: pip install pywebview flask flask-cors requests pyinstaller pywin32 pythonnet
 
       - name: Build EXE
-        run: |
-          pyinstaller --onefile --windowed ^
-            --name "Axesta" ^
-            --add-data "desktop\ui;ui" ^
-            --add-data "desktop\version.json;." ^
-            --hidden-import flask ^
-            --hidden-import flask_cors ^
-            --hidden-import webview ^
-            --hidden-import webview.platforms.winforms ^
-            --hidden-import clr ^
-            desktop\main.py
+        run: pyinstaller --onefile --windowed --name "Axesta" --add-data "desktop/ui;ui" --add-data "desktop/version.json;." --hidden-import flask --hidden-import flask_cors --hidden-import webview --hidden-import webview.platforms.winforms --hidden-import clr desktop/main.py
 
       - name: Get version
         id: ver
@@ -51,7 +41,6 @@ jobs:
           make_latest: true
           body: |
             **Axesta ${{ steps.ver.outputs.codename }}** (`${{ steps.ver.outputs.version }}`)
-            
             Windows desktop build — automatikusan generálva a `main` branch-ről.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
