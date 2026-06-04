@@ -902,6 +902,72 @@ function renderCtrl(m){
   });
 }
 
+
+// ── SPAWN ──────────────────────────────────────────────────────────
+const AIRCRAFT = [
+  {id:"pmdg737",name:"PMDG 737-800",sub:"Boeing 737NG",color:"#5ec8ff",file:"pmdg737.flt"},
+  {id:"fenix",  name:"Fenix A321",  sub:"Airbus A321", color:"#a78bfa",file:"fenix.flt"},
+  {id:"a32nx",  name:"FlyByWire A32NX",sub:"Airbus A320neo",color:"#52e3b0",file:"a32nx.flt"},
+  {id:"custom", name:"Egyéni...",   sub:"Saját .flt",  color:"#ffb454",file:null},
+];
+let _spawnStatus="",_spawnLoading=false,_customFlt="";
+
+async function doSpawn(file){
+  if(!file){_spawnStatus="❌ Nincs fájl";renderTab();return;}
+  _spawnLoading=true;_spawnStatus="";renderTab();
+  try{
+    const r=await api("/api/spawn",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({file})});
+    _spawnStatus=r.ok?"✅ Repülő betöltve! Ellenőrizd az MSFS-t.":"❌ Hiba: "+(r.error||"ismeretlen");
+  }catch(e){_spawnStatus="❌ Bridge nem fut: "+e.message;}
+  _spawnLoading=false;renderTab();
+}
+
+function renderSpawn(m){
+  const sl=el("div","sl anim");sl.textContent="Spawn Aircraft";m.appendChild(sl);
+  if(!S.rtdb){
+    const w=el("div","warn anim");
+    w.innerHTML="⚠ SimBridge nem fut — indítsd el Windowson MSFS mellé.";
+    m.appendChild(w);
+  }
+  const info=el("div","card anim");
+  info.innerHTML=`<div style='font-size:11px;color:var(--dim);line-height:1.7'>
+    Mentsd el az MSFS-ben a state-et (<b>Save Flight</b>), majd másold a <code style='background:var(--p2);padding:1px 5px;border-radius:4px'>.flt</code> fájlt a <code style='background:var(--p2);padding:1px 5px;border-radius:4px'>desktop/flights/</code> mappába.
+  </div>`;
+  m.appendChild(info);
+  const grid=el("div","g2 anim");grid.style.marginBottom="12px";
+  AIRCRAFT.forEach(a=>{
+    const tile=el("button","tile");
+    tile.style.borderColor=a.color+"22";
+    const top=el("div","flex aic gap8");top.style.marginBottom="9px";
+    const ic=el("div","tile-ic");ic.style.cssText=`color:${a.color};width:32px;height:32px`;
+    ic.innerHTML=`<svg viewBox='0 0 24 24'><path d='M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z'/></svg>`;
+    const txt=el("div");
+    txt.innerHTML=`<div style='font-size:13px;font-weight:700;color:var(--tx)'>${a.name}</div><div style='font-size:10px;color:var(--dim)'>${a.sub}</div>`;
+    top.appendChild(ic);top.appendChild(txt);
+    const bot=el("div","flex aic jb");
+    const fn=el("span");fn.style.cssText="font-size:9px;color:var(--dim);font-family:var(--mono)";fn.textContent=a.file||"válassz...";
+    const badge=el("span");badge.style.cssText=`font-size:9px;padding:2px 7px;border-radius:99px;background:${a.color}18;border:1px solid ${a.color}35;color:${a.color};font-weight:700`;badge.textContent=a.file?"KÉSZ":"CUSTOM";
+    bot.appendChild(fn);bot.appendChild(badge);
+    tile.appendChild(top);tile.appendChild(bot);
+    if(a.id==="custom"){
+      tile.addEventListener("click",()=>{
+        const fn2=prompt("Fájlnév:",_customFlt||"sajat.flt");
+        if(fn2){_customFlt=fn2;doSpawn(fn2);}
+      });
+    }else{
+      tile.addEventListener("click",()=>doSpawn(a.file));
+    }
+    grid.appendChild(tile);
+  });
+  m.appendChild(grid);
+  if(_spawnLoading){const ld=el("div","warn");ld.textContent="⏳ Betöltés...";m.appendChild(ld);}
+  if(_spawnStatus){
+    const st=el("div","card");
+    st.style.cssText="border-color:"+((_spawnStatus.startsWith("✅"))?"rgba(82,227,176,.3)":"rgba(240,96,128,.3)")+";color:"+(_spawnStatus.startsWith("✅")?"var(--gn)":"var(--rd)")+";font-size:12px;font-weight:600";
+    st.textContent=_spawnStatus;m.appendChild(st);
+  }
+}
+
 // ── SETTINGS ──────────────────────────────────────────────────────
 function renderSettings(m){
   const {cfg}=S;
