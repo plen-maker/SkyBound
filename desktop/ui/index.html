@@ -322,6 +322,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--tx);font-
       <div class="bstat"><div class="bstat-l">UTC</div><div class="bstat-v on" id="sUtc">—</div></div>
       <div class="sep"></div>
       <div class="livepill" id="livePill"><div class="ldot"></div><span>SIM</span></div>
+      <div class="livepill" id="bridgePill" title="SimBridge státusz" style="cursor:pointer" onclick="navTo('settings')">
+        <div class="ldot"></div><span>BRIDGE</span>
+      </div>
       <div class="bar-email" id="barEmail">—</div>
       <button class="iconbtn" id="logoutBtn" title="Kijelentkezés">
         <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -498,11 +501,17 @@ function renderBar(){
   const p=$("livePill");if(!p)return;
   p.className="livepill"+(rtdb&&live?" on":"");
   p.innerHTML="<div class='ldot'></div><span>"+(rtdb&&live?"LIVE":"SIM")+"</span>";
+  const bp=$("bridgePill");if(bp){
+    bp.className="livepill"+(rtdb?" on":"");
+    bp.innerHTML="<div class='ldot'></div><span>BRIDGE</span>";
+    bp.title=rtdb?"SimBridge csatlakozva":"SimBridge nem fut";
+  }
 }
 
 // ── Sidebar ────────────────────────────────────────────────────────
 const TABS=[
   {id:"home",l:"Home",svg:"<polygon points='3 9 12 2 21 9 21 20 3 20'/>"},
+  {id:"spawn",l:"Spawn",svg:"<path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/>"},
   {id:"map",l:"Map",svg:"<polygon points='1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6'/>"},
   {id:"ofp",l:"OFP",svg:"<path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/>"},
   {id:"vatsim",l:"VATSIM",svg:"<path d='M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z'/>"},
@@ -534,7 +543,7 @@ function renderTab(){
   if(S.tab==="map"&&$("leafletMap"))return;
   if(S.tab!=="map")window._lfMap=null;
   m.innerHTML="";m.style.padding="20px 22px";m.style.overflow="auto";
-  ({home:renderHome,map:renderMap,ofp:renderOFP,vatsim:renderVatsim,
+  ({home:renderHome,map:renderMap,spawn:renderSpawn,ofp:renderOFP,vatsim:renderVatsim,
     charts:renderCharts,alerts:renderAlerts,ctrl:renderCtrl,settings:renderSettings})[S.tab]?.(m);
 }
 
@@ -926,7 +935,13 @@ function renderSettings(m){
    ["green","#060e09","#33e899"],["amber","#0d0904","#ffaa22"],["light","#edf1f7","#0878be"]].forEach(([v,bg,ac])=>{
     const s=el("button","swatch"+(cfg.theme===v?" on":""));s.title=v;
     s.style.cssText=`background:linear-gradient(135deg,${bg} 50%,${ac} 50%);border:${cfg.theme===v?"3px solid "+ac:"2px solid var(--line)"};box-shadow:${cfg.theme===v?"0 0 8px "+ac+"55":"none"}`;
-    s.addEventListener("click",()=>{S.cfg.theme=v;applyTheme(v);saveCfg();if(S.tab==="settings")renderTab();});sw.appendChild(s);
+    s.addEventListener("click",()=>{S.cfg.theme=v;applyTheme(v);saveCfg();(()=>{
+      if(S.tab!=="settings")return;
+      const m=document.getElementById("main");
+      const sy=m?m.scrollTop:0;
+      renderTab();
+      if(m)setTimeout(()=>m.scrollTop=sy,0);
+    })();});sw.appendChild(s);
   });
   srow("Téma","Megjelenési téma",sw);
 
@@ -948,11 +963,23 @@ function renderSettings(m){
 
   // 5. OFP megjelenítés
   srow("OFP megjelenítés","Simplified vagy valódi SimBrief doc",
-    pills([["simplified","Simplified"],["realistic","Realistic"]],cfg.ofpMode,v=>{S.cfg.ofpMode=v;saveCfg();if(S.tab==="settings")renderTab();}),d+=step);
+    pills([["simplified","Simplified"],["realistic","Realistic"]],cfg.ofpMode,v=>{S.cfg.ofpMode=v;saveCfg();(()=>{
+      if(S.tab!=="settings")return;
+      const m=document.getElementById("main");
+      const sy=m?m.scrollTop:0;
+      renderTab();
+      if(m)setTimeout(()=>m.scrollTop=sy,0);
+    })();}),d+=step);
 
   // 6. Grid elrendezés
   srow("Shortcut grid","Oszlopok száma a kezdőlapon",
-    pills([["1","1"],["2","2"],["3","3"],["4","4"]],cfg.gridCols||"4",v=>{S.cfg.gridCols=v;saveCfg();if(S.tab==="settings")renderTab();}),d+=step);
+    pills([["1","1"],["2","2"],["3","3"],["4","4"]],cfg.gridCols||"4",v=>{S.cfg.gridCols=v;saveCfg();(()=>{
+      if(S.tab!=="settings")return;
+      const m=document.getElementById("main");
+      const sy=m?m.scrollTop:0;
+      renderTab();
+      if(m)setTimeout(()=>m.scrollTop=sy,0);
+    })();}),d+=step);
 
   // 7. Linkek megnyitása
   srow("Linkek megnyitása","Rendszer böngésző vagy beépített",
@@ -1015,7 +1042,13 @@ function renderSettings(m){
 
   // 19. Dev mód toggle
   srow("Dev mód","Fejlesztői opciók megjelenítése",
-    pills([["true","Be"],["false","Ki"]],String(cfg.devMode===true),v=>{S.cfg.devMode=v==="true";saveCfg();if(S.tab==="settings")renderTab();}),d+=step);
+    pills([["true","Be"],["false","Ki"]],String(cfg.devMode===true),v=>{S.cfg.devMode=v==="true";saveCfg();(()=>{
+      if(S.tab!=="settings")return;
+      const m=document.getElementById("main");
+      const sy=m?m.scrollTop:0;
+      renderTab();
+      if(m)setTimeout(()=>m.scrollTop=sy,0);
+    })();}),d+=step);
 
   // 20. Dev panel
   if(cfg.devMode){
@@ -1031,7 +1064,13 @@ function renderSettings(m){
       S.cfg.codename=cnI.value;S.cfg.version=vI.value;S.cfg.channel=chS.value;
       await saveCfg();
       await api("/api/version",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({codename:cnI.value,version:vI.value,channel:chS.value})});
-      if(S.tab==="settings")renderTab();
+      (()=>{
+      if(S.tab!=="settings")return;
+      const m=document.getElementById("main");
+      const sy=m?m.scrollTop:0;
+      renderTab();
+      if(m)setTimeout(()=>m.scrollTop=sy,0);
+    })();
     });
     dr.appendChild(el("div").appendChild(Object.assign(el("div"),{style:"font-size:8px;color:var(--dim);letter-spacing:1px;margin-bottom:3px",textContent:"CODENAME"}))&&el("div")||(()=>{const w=el("div");w.innerHTML=`<div style='font-size:8px;color:var(--dim);letter-spacing:1px;margin-bottom:3px'>CODENAME</div>`;w.appendChild(cnI);return w;})());
     dr.appendChild((()=>{const w=el("div");w.innerHTML=`<div style='font-size:8px;color:var(--dim);letter-spacing:1px;margin-bottom:3px'>VERSION</div>`;w.appendChild(vI);return w;})());

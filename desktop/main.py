@@ -94,6 +94,25 @@ def vatsim():
     except Exception as e:
         return jsonify({"error":str(e)})
 
+@app.route("/api/spawn", methods=["POST"])
+def spawn():
+    import os
+    data = request.json or {}
+    filename = data.get("file","")
+    if not filename:
+        return jsonify({"error":"Nincs fájlnév"})
+    # Look for .flt in desktop/flights/ folder
+    flights_dir = os.path.join(BASE, "flights")
+    flt_path = os.path.join(flights_dir, filename)
+    if not os.path.exists(flt_path):
+        return jsonify({"error": f"Fájl nem található: {filename} (desktop/flights/ mappában kell lennie)"})
+    # Try SimConnect via msfs-simconnect-on-simconnect or just write to known path
+    # Write path to a temp file that the bridge can pick up
+    tmp = os.path.expanduser("~/.axesta_spawn.txt")
+    with open(tmp,"w") as f:
+        f.write(flt_path)
+    return jsonify({"ok": True, "path": flt_path})
+
 @app.route("/api/update")
 def update():
     try:
