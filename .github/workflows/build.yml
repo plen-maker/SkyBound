@@ -1,4 +1,4 @@
-name: Axesta — Windows Build
+name: SkyBound — Build & Release
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  desktop-win:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +22,7 @@ jobs:
         run: pip install pywebview flask flask-cors requests pyinstaller pywin32 pythonnet
 
       - name: Build EXE
-        run: pyinstaller --onefile --windowed --name "Axesta" --add-data "desktop/ui;ui" --add-data "desktop/version.json;." --hidden-import flask --hidden-import flask_cors --hidden-import webview --hidden-import webview.platforms.winforms --hidden-import clr desktop/main.py
+        run: pyinstaller --onefile --windowed --name "Axesta" --add-data "desktop/ui;ui" --add-data "desktop/version.json;." --add-data "desktop/flights;flights" --hidden-import flask --hidden-import flask_cors --hidden-import webview --hidden-import webview.platforms.winforms --hidden-import clr desktop/main.py
 
       - name: Get version
         id: ver
@@ -32,6 +32,12 @@ jobs:
           echo "codename=$($v.codename)" >> $env:GITHUB_OUTPUT
           echo "version=$($v.version)" >> $env:GITHUB_OUTPUT
 
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: axesta-win
+          path: dist/Axesta.exe
+
       - name: Update latest release
         uses: softprops/action-gh-release@v2
         with:
@@ -39,8 +45,63 @@ jobs:
           name: "Axesta ${{ steps.ver.outputs.codename }} · ${{ steps.ver.outputs.version }}"
           files: dist/Axesta.exe
           make_latest: true
-          body: |
-            **Axesta ${{ steps.ver.outputs.codename }}** (`${{ steps.ver.outputs.version }}`)
-            Windows desktop build — automatikusan generálva a `main` branch-ről.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  mobile-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install mobile deps
+        working-directory: mobile
+        run: npm install
+
+      - name: Build React
+        working-directory: mobile
+        run: npm run build
+
+      - name: Capacitor sync
+        working-directory: mobile
+        run: npx cap sync android
+
+      - name: Build APK
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign
+        with:
+          releaseDirectory: mobile/android/app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        continue-on-error: true
+
+      - name: Rename APK
+        shell: bash
+        run: |
+          if [ -f "${{ steps.sign.outputs.signedReleaseFile }}" ]; then
+            mv "${{ steps.sign.outputs.signedReleaseFile }}" mobile/android/app/build/outputs/apk/release/SkyBound.apk
+          else
+            cp mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk mobile/android/app/build/outputs/apk/release/SkyBound.apk
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skybound-apk
+          path: mobile/android/app/build/outputs/apk/release/SkyBound.apk
