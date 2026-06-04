@@ -52,19 +52,17 @@ jobs:
 
       - name: Install mobile deps
         working-directory: mobile
-        run: npm install
+        run: npm ci
 
-      - name: Build React
+      - name: Generate Android project
         working-directory: mobile
-        run: npm run build
-
-      - name: Capacitor sync
-        working-directory: mobile
-        run: npx cap sync android
+        run: npx expo prebuild --platform android --non-interactive --clean
 
       - name: Build APK
         working-directory: mobile/android
-        run: ./gradlew assembleRelease --no-daemon
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-daemon
 
       - name: Sign APK
         uses: r0adkll/sign-android-release@v1
@@ -116,18 +114,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          if [ "${{ github.ref_name }}" = "dev" ]; then
-            TAG="$(gh api "repos/$GH_REPO/releases" --jq 'map(select(.draft == false and .prerelease == true))[0].tag_name // empty')"
-            if [ -z "$TAG" ]; then
-              echo "No published prerelease found for the dev channel. Create a prerelease in GitHub first."
-              exit 1
-            fi
-          else
-            TAG="$(gh api "repos/$GH_REPO/releases/latest" --jq '.tag_name')"
-            if [ -z "$TAG" ]; then
-              echo "No latest release found for the main channel. Create a normal release in GitHub first."
-              exit 1
-            fi
+          TAG="$(gh api "repos/$GH_REPO/releases/latest" --jq '.tag_name')"
+          if [ -z "$TAG" ]; then
+            echo "No latest release found. Create and publish a normal GitHub release first."
+            exit 1
           fi
 
           gh release upload "$TAG" release-assets/* --clobber
