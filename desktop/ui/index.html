@@ -22,8 +22,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--tx);font-
 
 /* ── Layout ── */
 .app{height:100vh;display:flex;flex-direction:column;overflow:hidden}
-.body{display:flex;flex:1;overflow:hidden}
-.main{flex:1;overflow-y:auto;overflow-x:hidden;padding:20px 22px}
+.body{display:flex;flex:1;overflow:hidden;min-height:0}
+.main{flex:1;overflow-y:auto;overflow-x:hidden;padding:20px 22px;height:0;min-height:0}
 
 /* ── Titlebar ── */
 .bar{
@@ -502,9 +502,10 @@ function renderBar(){
   p.className="livepill"+(rtdb&&live?" on":"");
   p.innerHTML="<div class='ldot'></div><span>"+(rtdb&&live?"LIVE":"SIM")+"</span>";
   const bp=$("bridgePill");if(bp){
-    bp.className="livepill"+(rtdb?" on":"");
+    const bridgeOn=rtdb&&live!=null;
+    bp.className="livepill"+(bridgeOn?" on":"");
     bp.innerHTML="<div class='ldot'></div><span>BRIDGE</span>";
-    bp.title=rtdb?"SimBridge csatlakozva":"SimBridge nem fut";
+    bp.title=bridgeOn?"SimBridge + MSFS aktív":rtdb?"SimBridge fut (MSFS nem fut)":"SimBridge nem fut";
   }
 }
 
@@ -984,7 +985,11 @@ function renderSettings(m){
     const w=el("div","flex gap6");
     options.forEach(([v,l])=>{
       const b=el("button","pill"+(current===v?" on":""));b.textContent=l;
-      b.addEventListener("click",()=>{onChange(v);});w.appendChild(b);
+      b.addEventListener("click",()=>{
+        onChange(v);
+        // Update pill states in-place — no full re-render
+        w.querySelectorAll(".pill").forEach((p,i)=>p.classList.toggle("on",options[i][0]===v));
+      });w.appendChild(b);
     });
     return w;
   }
@@ -1001,13 +1006,16 @@ function renderSettings(m){
    ["green","#060e09","#33e899"],["amber","#0d0904","#ffaa22"],["light","#edf1f7","#0878be"]].forEach(([v,bg,ac])=>{
     const s=el("button","swatch"+(cfg.theme===v?" on":""));s.title=v;
     s.style.cssText=`background:linear-gradient(135deg,${bg} 50%,${ac} 50%);border:${cfg.theme===v?"3px solid "+ac:"2px solid var(--line)"};box-shadow:${cfg.theme===v?"0 0 8px "+ac+"55":"none"}`;
-    s.addEventListener("click",()=>{S.cfg.theme=v;applyTheme(v);saveCfg();(()=>{
-      if(S.tab!=="settings")return;
-      const m=document.getElementById("main");
-      const sy=m?m.scrollTop:0;
-      renderTab();
-      if(m)setTimeout(()=>m.scrollTop=sy,0);
-    })();});sw.appendChild(s);
+    s.addEventListener("click",()=>{
+      S.cfg.theme=v;applyTheme(v);saveCfg();
+      // Update swatch borders in-place
+      sw.querySelectorAll(".swatch").forEach((sw2,i)=>{
+        const [v2,,ac2]=[["dark","#08090e","#5ec8ff"],["midnight","#000005","#5ec8ff"],["navy","#080a1a","#4db8ff"],["green","#060e09","#33e899"],["amber","#0d0904","#ffaa22"],["light","#edf1f7","#0878be"]][i];
+        sw2.style.border=S.cfg.theme===v2?"3px solid "+ac2:"2px solid var(--line)";
+        sw2.style.boxShadow=S.cfg.theme===v2?"0 0 8px "+ac2+"55":"none";
+        sw2.classList.toggle("on",S.cfg.theme===v2);
+      });
+    });sw.appendChild(s);
   });
   srow("Téma","Megjelenési téma",sw);
 
