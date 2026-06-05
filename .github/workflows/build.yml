@@ -40,46 +40,40 @@ jobs:
           New-Item -ItemType Directory -Force -Path installer_out
           python -c "
           from PIL import Image, ImageDraw, ImageFont
-          import os
-          # Banner 164x314
           W,H=164,314
           img=Image.new('RGB',(W,H),'#08090e')
           d=ImageDraw.Draw(img)
           for y in range(H):
-              t=y/H; r=int(8+t*14); g=int(9+t*16); b=int(14+t*24)
+              t=y/H;r=int(8+t*14);g=int(9+t*16);b=int(14+t*24)
               d.line([(0,y),(W,y)],fill=(r,g,b))
-          for y in range(H):
-              d.line([(W-3,y),(W-1,y)],fill=(40,180,255))
+          for y in range(H): d.line([(W-3,y),(W-1,y)],fill=(40,180,255))
           try:
               fb=ImageFont.truetype('C:/Windows/Fonts/arialbd.ttf',22)
               fm=ImageFont.truetype('C:/Windows/Fonts/arialbd.ttf',14)
               fs=ImageFont.truetype('C:/Windows/Fonts/arial.ttf',10)
-          except:
-              fb=fm=fs=ImageFont.load_default()
+          except: fb=fm=fs=ImageFont.load_default()
           d.text((20,40),'X',font=fb,fill='#5ec8ff')
           d.text((42,40),'DECK',font=fm,fill='#d4dff0')
           d.text((20,68),'EFB',font=fs,fill='#4a6080')
           d.line([(20,90),(W-20,90)],fill='#1e2535',width=1)
           d.text((20,100),'Orion',font=fm,fill='#5ec8ff')
           d.text((20,118),'v0.1.0',font=fs,fill='#4a6080')
-          feats=['SimBrief OFP','VATSIM ATC','METAR','Live Bridge','Push Alerts']
-          for i,f in enumerate(feats): d.text((20,155+i*22),'+ '+f,font=fs,fill='#d4dff0')
+          for i,f in enumerate(['SimBrief OFP','VATSIM ATC','METAR','Live Bridge','Push Alerts']):
+              d.text((20,155+i*22),'+ '+f,font=fs,fill='#d4dff0')
           d.text((20,H-40),'MSFS 2020/2024',font=fs,fill='#4a6080')
           img.save('installer_assets/installer_banner.bmp')
-          # Small icon 55x55
           img2=Image.new('RGB',(55,55),'#08090e')
           d2=ImageDraw.Draw(img2)
           d2.ellipse([4,4,51,51],fill='#0e1018',outline='#5ec8ff',width=2)
           d2.text((14,10),'X',font=fb,fill='#5ec8ff')
           img2.save('installer_assets/installer_icon.bmp')
-          # ICO from BMP
           img3=Image.new('RGBA',(256,256),(8,9,14,255))
           d3=ImageDraw.Draw(img3)
           try: fx=ImageFont.truetype('C:/Windows/Fonts/arialbd.ttf',160)
           except: fx=ImageFont.load_default()
           d3.text((30,20),'X',font=fx,fill='#5ec8ff')
           img3.save('installer_assets/icon.ico',format='ICO',sizes=[(256,256),(128,128),(64,64),(32,32),(16,16)])
-          print('Assets generated')
+          print('Assets ok')
           "
 
       - name: Build Installer
@@ -88,12 +82,88 @@ jobs:
           iscc installer.iss
         continue-on-error: true
 
-      - name: Fallback if installer failed
+      - name: Fallback EXE if no installer
         shell: pwsh
         run: |
           if (!(Test-Path "installer_out\*.exe")) {
             Copy-Item "dist\Xdeck EFB.exe" "installer_out\Xdeck-EFB-${{ steps.ver.outputs.codename }}.exe"
           }
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xdeck-win
+          path: installer_out/*.exe
+
+  mobile-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install deps
+        working-directory: mobile
+        run: npm install
+
+      - name: Expo prebuild
+        working-directory: mobile
+        run: npx expo prebuild --platform android --clean
+
+      - name: Build APK
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign
+        with:
+          releaseDirectory: mobile/android/app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        continue-on-error: true
+
+      - name: Rename APK
+        run: |
+          SRC=mobile/android/app/build/outputs/apk/release
+          if [ -f "${{ steps.sign.outputs.signedReleaseFile }}" ]; then
+            mv "${{ steps.sign.outputs.signedReleaseFile }}" $SRC/Xdeck-EFB.apk
+          else
+            cp $SRC/app-release-unsigned.apk $SRC/Xdeck-EFB.apk
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xdeck-apk
+          path: mobile/android/app/build/outputs/apk/release/Xdeck-EFB.apk
+
+  release:
+    needs: [desktop-win, mobile-apk]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: ver
+        run: |
+          node -e "const v=require('./desktop/version.json');console.log('codename='+v.codename);console.log('version='+v.version);console.log('tag='+v.codename+'-'+v.version)" >> $GITHUB_OUTPUT
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -101,26 +171,21 @@ jobs:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: "Xdeck EFB — ${{ steps.ver.outputs.codename }} · v${{ steps.ver.outputs.version }}"
           make_latest: true
-          files: installer_out/*.exe
+          files: |
+            artifacts/xdeck-win/*.exe
+            artifacts/xdeck-apk/*.apk
           body: |
             ## Xdeck EFB — ${{ steps.ver.outputs.codename }} · v${{ steps.ver.outputs.version }}
 
-            ### Telepítés
-            Töltsd le a `Xdeck-EFB-Setup-${{ steps.ver.outputs.codename }}.exe` fájlt és futtasd rendszergazdaként.
+            ### Windows
+            Töltsd le a `Xdeck-EFB-Setup-Orion.exe` fájlt és futtasd rendszergazdaként.
 
-            ### Tartalom
-            - SimBrief OFP betöltés
-            - VATSIM ATC lista  
-            - METAR időjárás
-            - Live sim bridge (SimConnect / FSUIPC7)
-            - Push trigger alerts
-            - 20 beállítás
+            ### Android
+            Töltsd le a `Xdeck-EFB.apk` fájlt, engedélyezd az ismeretlen forrásból való telepítést, és futtasd.
 
             ### Bridge indítása
             ```
-            cd bridge
-            npm install
-            npm run start:simconnect
+            cd bridge && npm install && npm run start:simconnect
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
