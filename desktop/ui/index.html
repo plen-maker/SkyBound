@@ -474,9 +474,10 @@ async function loadOFP(u){
 
 // ── VATSIM ────────────────────────────────────────────────────────
 async function loadVatsim(){
+  S._vatsimLoading=true;
   S.vd=null;
-  if(S.tab==="vatsim") renderVatsimContent();
   S.vd=await api("/api/vatsim");
+  S._vatsimLoading=false;
   if(S.tab==="vatsim") renderVatsimContent();
 }
 
@@ -800,7 +801,11 @@ function renderVatsim(m){
   const sl=el("div","sl");sl.style.margin="0";sl.textContent="VATSIM ATC";
   const rb=el("button","btn btn-dk");rb.textContent="↻ Frissít";rb.addEventListener("click",loadVatsim);
   hdr.appendChild(sl);hdr.appendChild(rb);m.appendChild(hdr);
-  if(!S.vd){loadVatsim();const ld=el("div");ld.style.cssText="text-align:center;padding:30px;color:var(--dim);font-size:11px";ld.textContent="Betöltés...";m.appendChild(ld);return;}
+  if(!S.vd){
+    // Only start loading if not already loading
+    if(!S._vatsimLoading){ S._vatsimLoading=true; loadVatsim(); }
+    const ld=el("div");ld.style.cssText="text-align:center;padding:30px;color:var(--dim);font-size:11px";ld.textContent="Betöltés...";m.appendChild(ld);return;
+  }
   const FAC={0:"OBS",1:"FSS",2:"DEL",3:"GND",4:"TWR",5:"APP",6:"CTR"};
   const FC={DEL:"#a78bfa",GND:"#52e3b0",TWR:"#5ec8ff",APP:"#ffb454",CTR:"#f06080",FSS:"#94a3b8",OBS:"#4a6080"};
   const am={};(S.vd.atis||[]).forEach(a=>{am[a.callsign]=a;});
@@ -1042,11 +1047,11 @@ function renderSettings(m){
 
   // 3. Fenix EFB
   srow("Fenix EFB cím","pl. http://192.168.1.5:8080",
-    textInp(cfg.fenixUrl||"","http://192.168.1.x:8080","220px",v=>{S.cfg.fenixUrl=v;saveCfg();}),d+=step);
+    textInp(cfg.fenixUrl||"","http://192.168.1.x:8080","220px",v=>{S.cfg.fenixUrl=v;saveCfg();}));
 
   // 4. Session kód
   srow("Session kód","Firebase sync azonosító",
-    textInp(cfg.sessionCode||"","ddnemet-host","160px",v=>{S.cfg.sessionCode=v;saveCfg();connectRTDB();}),d+=step);
+    textInp(cfg.sessionCode||"","ddnemet-host","160px",v=>{S.cfg.sessionCode=v;saveCfg();connectRTDB();}));
 
   // 5. OFP megjelenítés
   srow("OFP megjelenítés","Simplified vagy valódi SimBrief doc",
@@ -1054,9 +1059,11 @@ function renderSettings(m){
       if(S.tab!=="settings")return;
       const m=document.getElementById("main");
       const sy=m?m.scrollTop:0;
-      renderTab();
-      if(m)setTimeout(()=>m.scrollTop=sy,0);
-    })();}),d+=step);
+      m.innerHTML="";
+      m.style.padding="20px 22px";
+      renderSettings(m);
+      setTimeout(()=>{if(m)m.scrollTop=sy;},10);
+    })();}));
 
   // 6. Grid elrendezés
   srow("Shortcut grid","Oszlopok száma a kezdőlapon",
@@ -1064,45 +1071,47 @@ function renderSettings(m){
       if(S.tab!=="settings")return;
       const m=document.getElementById("main");
       const sy=m?m.scrollTop:0;
-      renderTab();
-      if(m)setTimeout(()=>m.scrollTop=sy,0);
-    })();}),d+=step);
+      m.innerHTML="";
+      m.style.padding="20px 22px";
+      renderSettings(m);
+      setTimeout(()=>{if(m)m.scrollTop=sy;},10);
+    })();}));
 
   // 7. Linkek megnyitása
   srow("Linkek megnyitása","Rendszer böngésző vagy beépített",
-    pills([["browser","Böngészőben"],["app","App-ban"]],cfg.linkMode||"browser",v=>{S.cfg.linkMode=v;saveCfg();}),d+=step);
+    pills([["browser","Böngészőben"],["app","App-ban"]],cfg.linkMode||"browser",v=>{S.cfg.linkMode=v;saveCfg();}));
 
   // 8. OFP auto-betöltés
   srow("Induláskor OFP betölt","Automatikus SimBrief lekérés",
-    pills([["true","Igen"],["false","Nem"]],String(cfg.autoLoadOfp!==false),v=>{S.cfg.autoLoadOfp=v==="true";saveCfg();}),d+=step);
+    pills([["true","Igen"],["false","Nem"]],String(cfg.autoLoadOfp!==false),v=>{S.cfg.autoLoadOfp=v==="true";saveCfg();}));
 
   // 9. Idő formátum
   srow("Időzóna megjelenítés","Titlebar óra",
-    pills([["utc","UTC"],["local","Helyi"]],cfg.timeMode||"utc",v=>{S.cfg.timeMode=v;saveCfg();}),d+=step);
+    pills([["utc","UTC"],["local","Helyi"]],cfg.timeMode||"utc",v=>{S.cfg.timeMode=v;saveCfg();}));
 
   // 10. Sebesség egység
   srow("Sebesség egység","GS kijelzés",
-    pills([["kt","Knot (kt)"],["kmh","km/h"]],cfg.speedUnit||"kt",v=>{S.cfg.speedUnit=v;saveCfg();renderBar();}),d+=step);
+    pills([["kt","Knot (kt)"],["kmh","km/h"]],cfg.speedUnit||"kt",v=>{S.cfg.speedUnit=v;saveCfg();renderBar();}));
 
   // 11. Súly egység
   srow("Súly egység","Fuel és payload megjelenítés",
-    pills([["kg","kg"],["lbs","lbs"]],cfg.weightUnit||"kg",v=>{S.cfg.weightUnit=v;saveCfg();}),d+=step);
+    pills([["kg","kg"],["lbs","lbs"]],cfg.weightUnit||"kg",v=>{S.cfg.weightUnit=v;saveCfg();}));
 
   // 12. Térkép stílus
   srow("Térkép stílus","Satellite vagy utcatérkép",
-    pills([["satellite","Satellite"],["street","Street"]],cfg.mapStyle||"satellite",v=>{S.cfg.mapStyle=v;saveCfg();}),d+=step);
+    pills([["satellite","Satellite"],["street","Street"]],cfg.mapStyle||"satellite",v=>{S.cfg.mapStyle=v;saveCfg();}));
 
   // 13. Route megjelenítés
   srow("Route a térképen","OFP útvonal megjelenítése",
-    pills([["true","Igen"],["false","Nem"]],String(cfg.mapRoute!==false),v=>{S.cfg.mapRoute=v==="true";saveCfg();}),d+=step);
+    pills([["true","Igen"],["false","Nem"]],String(cfg.mapRoute!==false),v=>{S.cfg.mapRoute=v==="true";saveCfg();}));
 
   // 14. Betűméret
   srow("Betűméret","UI szövegméret",
-    pills([["small","Kis"],["normal","Normál"],["large","Nagy"]],cfg.fontSize||"normal",v=>{S.cfg.fontSize=v;saveCfg();applyTheme(cfg.theme);}),d+=step);
+    pills([["small","Kis"],["normal","Normál"],["large","Nagy"]],cfg.fontSize||"normal",v=>{S.cfg.fontSize=v;saveCfg();applyTheme(cfg.theme);}));
 
   // 15. Animáció sebesség
   srow("Animáció sebesség","Átmenetek és effektek",
-    pills([["slow","Lassú"],["normal","Normál"],["fast","Gyors"],["off","Ki"]],cfg.animSpeed||"normal",v=>{S.cfg.animSpeed=v;saveCfg();applyTheme(cfg.theme);}),d+=step);
+    pills([["slow","Lassú"],["normal","Normál"],["fast","Gyors"],["off","Ki"]],cfg.animSpeed||"normal",v=>{S.cfg.animSpeed=v;saveCfg();applyTheme(cfg.theme);}));
 
   // 16. VATSIM frissítés
   const vatsimRow=el("div","flex gap6 aic");
@@ -1114,7 +1123,7 @@ function renderSettings(m){
 
   // 17. Értesítések
   srow("Push értesítések","Firebase trigger hangjelzés",
-    pills([["true","Be"],["false","Ki"]],String(cfg.notifications!==false),v=>{S.cfg.notifications=v==="true";saveCfg();}),d+=step);
+    pills([["true","Be"],["false","Ki"]],String(cfg.notifications!==false),v=>{S.cfg.notifications=v==="true";saveCfg();}));
 
   // 18. Verzió
   const verRow=el("div","flex aic gap8");
@@ -1133,9 +1142,11 @@ function renderSettings(m){
       if(S.tab!=="settings")return;
       const m=document.getElementById("main");
       const sy=m?m.scrollTop:0;
-      renderTab();
-      if(m)setTimeout(()=>m.scrollTop=sy,0);
-    })();}),d+=step);
+      m.innerHTML="";
+      m.style.padding="20px 22px";
+      renderSettings(m);
+      setTimeout(()=>{if(m)m.scrollTop=sy;},10);
+    })();}));
 
   // 20. Dev panel
   if(cfg.devMode){
@@ -1155,8 +1166,10 @@ function renderSettings(m){
       if(S.tab!=="settings")return;
       const m=document.getElementById("main");
       const sy=m?m.scrollTop:0;
-      renderTab();
-      if(m)setTimeout(()=>m.scrollTop=sy,0);
+      m.innerHTML="";
+      m.style.padding="20px 22px";
+      renderSettings(m);
+      setTimeout(()=>{if(m)m.scrollTop=sy;},10);
     })();
     });
     dr.appendChild(el("div").appendChild(Object.assign(el("div"),{style:"font-size:8px;color:var(--dim);letter-spacing:1px;margin-bottom:3px",textContent:"CODENAME"}))&&el("div")||(()=>{const w=el("div");w.innerHTML=`<div style='font-size:8px;color:var(--dim);letter-spacing:1px;margin-bottom:3px'>CODENAME</div>`;w.appendChild(cnI);return w;})());
