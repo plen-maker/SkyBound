@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="200" fill="#08090e"/>
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5ec8ff"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+  </defs>
+  <!-- X letter -->
+  <text x="512" y="580" font-family="SF Pro Display, Helvetica, Arial" font-weight="900" 
+    font-size="520" text-anchor="middle" fill="url(#g)">X</text>
+  <!-- Small "deck" text -->
+  <text x="512" y="720" font-family="SF Pro Display, Helvetica, Arial" font-weight="700"
+    font-size="110" text-anchor="middle" fill="#5ec8ff" letter-spacing="20">DECK</text>
+  <!-- Plane icon -->
+  <path d="M512 180 L560 320 L512 290 L464 320 Z" fill="white" opacity="0.15"/>
+</svg>

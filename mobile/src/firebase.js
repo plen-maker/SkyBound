@@ -1,19 +1,15 @@
-import { initializeApp, getApps } from "firebase/app";
-import {
-  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-  signOut, onAuthStateChanged,
-} from "firebase/auth";
-import { getDatabase, ref, onValue, push, remove, update, set } from "firebase/database";
-import Constants from "expo-constants";
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getDatabase } from 'firebase/database';
 
-const cfg = Constants.expoConfig?.extra?.firebase;
-export const app = cfg ? (getApps().length ? getApps()[0] : initializeApp(cfg)) : null;
+const app = initializeApp({
+  apiKey: "AIzaSyAxHmLWOIJl4xC44uHsRbxqzRhF4mA0kqE",
+  authDomain: "simapp-99f40.firebaseapp.com",
+  databaseURL: "https://simapp-99f40-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "simapp-99f40",
+  messagingSenderId: "993511543138",
+  appId: "1:993511543138:web:ec3a0d3e19713160111c3b",
+});
 
-export const auth = app ? getAuth(app) : null;
-export const db   = app ? getDatabase(app) : null;
-
-export {
-  signInWithEmailAndPassword, createUserWithEmailAndPassword,
-  signOut, onAuthStateChanged,
-  ref, onValue, push, remove, update, set,
-};
+export const auth = getAuth(app);
+export const db = getDatabase(app);
