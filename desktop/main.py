@@ -9,7 +9,7 @@ parser.add_argument("--dev", action="store_true")
 ARGS, _ = parser.parse_known_args()
 
 BASE = os.path.dirname(os.path.abspath(__file__)) if not getattr(sys,"frozen",False) else sys._MEIPASS
-SETTINGS_FILE = os.path.expanduser("~/.axesta.json")
+SETTINGS_FILE = os.path.expanduser("~/.xdeck.json")
 VERSION_FILE  = os.path.join(BASE, "version.json")
 
 def load_json(path, default={}):
@@ -113,6 +113,22 @@ def spawn():
         f.write(flt_path)
     return jsonify({"ok": True, "path": flt_path})
 
+@app.route("/api/metar")
+def metar():
+    icao = request.args.get("icao","").upper()
+    if not icao: return jsonify({"error":"Nincs ICAO"})
+    try:
+        r = req.get(
+            f"https://aviationweather.gov/api/data/metar?ids={icao}&format=json&hours=2",
+            timeout=8, headers={"Accept":"application/json"}
+        )
+        data = r.json()
+        if not data:
+            return jsonify({"error": f"Nem található METAR: {icao}"})
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error":str(e)})
+
 @app.route("/api/update")
 def update():
     try:
@@ -133,7 +149,7 @@ def run_flask():
 def main():
     threading.Thread(target=run_flask, daemon=True).start()
     window = webview.create_window(
-        "Axesta",
+        "Xdeck EFB",
         url="http://127.0.0.1:47821/",
         width=1360, height=860,
         min_size=(900,600),
