@@ -112,6 +112,12 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Android Build Tools
+        run: |
+          sdkmanager "platform-tools"
+          sdkmanager "build-tools;34.0.0"
+          sdkmanager "platforms;android-34"
+
       - name: Install deps
         working-directory: mobile
         run: npm install
@@ -138,10 +144,18 @@ jobs:
       - name: Rename APK
         run: |
           SRC=mobile/android/app/build/outputs/apk/release
-          if [ -f "${{ steps.sign.outputs.signedReleaseFile }}" ]; then
-            mv "${{ steps.sign.outputs.signedReleaseFile }}" $SRC/Xdeck-EFB.apk
+
+          if [ -n "${{ steps.sign.outputs.signedReleaseFile }}" ] && [ -f "${{ steps.sign.outputs.signedReleaseFile }}" ]; then
+            cp "${{ steps.sign.outputs.signedReleaseFile }}" "$SRC/Xdeck-EFB.apk"
           else
-            cp $SRC/app-release-unsigned.apk $SRC/Xdeck-EFB.apk
+            APK=$(find "$SRC" -name "*.apk" | head -n 1)
+
+            if [ -n "$APK" ]; then
+              cp "$APK" "$SRC/Xdeck-EFB.apk"
+            else
+              echo "No APK found!"
+              exit 1
+            fi
           fi
 
       - name: Upload APK artifact
