@@ -21,9 +21,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--tx);font-
 ::-webkit-scrollbar-track{background:transparent}
 
 /* ── Layout ── */
-.app{height:100vh;display:flex;flex-direction:column;overflow:hidden}
-.body{display:flex;flex:1;overflow:hidden;min-height:0}
-.main{flex:1;overflow-y:auto;overflow-x:hidden;padding:20px 22px;height:0;min-height:0}
+.app{height:100vh;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.body{display:flex;flex:1;overflow:hidden;min-height:0;height:0}
+.main{flex:1;overflow-y:auto;overflow-x:hidden;padding:20px 22px;min-height:0}
 
 /* ── Titlebar ── */
 .bar{
@@ -462,17 +462,30 @@ setInterval(()=>{
 async function loadOFP(u){
   const un=(u||S.cfg.sbUser||"").trim();
   if(!un){S.ofpErr="Adj meg SimBrief usernevet.";renderTab();return;}
-  S.ofpLoading=true;S.ofpErr="";renderTab();
+  S.ofpLoading=true;S.ofpErr="";
+  if(S.tab==="ofp"){ const m=$("main");if(m){m.innerHTML="";m.style.padding="20px 22px";renderOFP(m);} }
   const r=await api("/api/ofp?username="+encodeURIComponent(un));
   if(r.error)S.ofpErr=r.error;
   else{S.ofp=r.ofp;S.cfg.sbUser=un;saveCfg();}
-  S.ofpLoading=false;renderTab();renderBar();
+  S.ofpLoading=false;
+  if(S.tab==="ofp"){ const m=$("main");if(m){m.innerHTML="";m.style.padding="20px 22px";renderOFP(m);} }
+  renderBar();
 }
 
 // ── VATSIM ────────────────────────────────────────────────────────
 async function loadVatsim(){
-  S.vd=null;renderTab();
-  S.vd=await api("/api/vatsim");renderTab();
+  S.vd=null;
+  if(S.tab==="vatsim") renderVatsimContent();
+  S.vd=await api("/api/vatsim");
+  if(S.tab==="vatsim") renderVatsimContent();
+}
+
+function renderVatsimContent(){
+  const m=$("main");
+  if(!m||S.tab!=="vatsim")return;
+  m.innerHTML="";
+  m.style.padding="20px 22px";
+  renderVatsim(m);
 }
 
 // ── RTDB ──────────────────────────────────────────────────────────

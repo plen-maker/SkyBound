@@ -139,6 +139,19 @@ def main():
         min_size=(900,600),
         background_color="#08090e",
     )
+    def on_shown():
+        # macOS: force window focus so first click registers (acceptFirstMouse workaround)
+        try:
+            import subprocess, os
+            subprocess.Popen([
+                "osascript", "-e",
+                f"tell application \"System Events\" to set frontmost of first process whose unix id is {os.getpid()} to true"
+            ])
+        except Exception:
+            pass
+
+    window.events.shown += on_shown
+
     webview.start(
         debug=ARGS.dev,
         private_mode=False,
