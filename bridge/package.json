@@ -3,19 +3,19 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "SkyBound EFB sim bridge — FSUIPC7 + SimConnect, Firebase RTDB",
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "start:fsuipc": "cross-env SIM_MODE=fsuipc7 node src/index.js",
-    "start:simconnect": "cross-env SIM_MODE=simconnect node src/index.js"
+    "start:fsuipc": "node src/index.js --fsuipc",
+    "start:simconnect": "node src/index.js --simconnect"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
     "firebase-admin": "^12.7.0",
-    "node-simconnect": "^3.2.0",
-    "fsuipc": "^0.7.3",
-    "cross-env": "^7.0.3"
+    "node-simconnect": "^3.2.0"
+  },
+  "optionalDependencies": {
+    "fsuipc": "^0.7.3"
   },
   "engines": { "node": ">=18" }
 }
