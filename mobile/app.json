@@ -31,8 +31,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "xdeck-efb"
+        "projectId": "8e644485-35c0-47cc-a9c6-68e288e5626c"
       }
-    }
+    },
+    "owner": "ddnemet"
   }
 }
