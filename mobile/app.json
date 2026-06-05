@@ -16,7 +16,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#08090e"
       },
-      "package": "cx.xdeck.efb",
+      "package": "sxa.skybound.efb",
       "versionCode": 1,
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
