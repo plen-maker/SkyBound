@@ -2,7 +2,7 @@
 <html lang="hu">
 <head>
 <meta charset="UTF-8"/>
-<title>Axesta</title>
+<title>Xdeck EFB</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
 :root{
@@ -312,7 +312,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--tx);font-
         <svg viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
       </div>
       <div>
-        <div class="logo-text">AXESTA</div>
+        <div class="logo-text">XDECK</div>
         <div class="logo-sub" id="barSub">no OFP · —</div>
       </div>
     </div>
@@ -343,7 +343,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--tx);font-
     <svg viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
   </div>
   <div style="text-align:center">
-    <div style="font-size:26px;font-weight:800;letter-spacing:.5px">AXESTA</div>
+    <div style="font-size:26px;font-weight:800;letter-spacing:.5px">XDECK</div>
     <div style="font-size:11px;color:var(--dim);margin-top:4px">Electronic Flight Bag · MSFS 2020/2024</div>
   </div>
   <div class="flex gap6" id="lmBtns">
@@ -526,7 +526,7 @@ function renderBar(){
 // ── Sidebar ────────────────────────────────────────────────────────
 const TABS=[
   {id:"home",l:"Home",svg:"<polygon points='3 9 12 2 21 9 21 20 3 20'/>"},
-  {id:"spawn",l:"Spawn",svg:"<path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/>"},
+  {id:"metar",l:"METAR",svg:"<path d='M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z'/>"},
   {id:"map",l:"Map",svg:"<polygon points='1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6'/>"},
   {id:"ofp",l:"OFP",svg:"<path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/>"},
   {id:"vatsim",l:"VATSIM",svg:"<path d='M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z'/>"},
@@ -558,7 +558,7 @@ function renderTab(){
   if(S.tab==="map"&&$("leafletMap"))return;
   if(S.tab!=="map")window._lfMap=null;
   m.innerHTML="";m.style.padding="20px 22px";m.style.overflow="auto";
-  ({home:renderHome,map:renderMap,spawn:renderSpawn,ofp:renderOFP,vatsim:renderVatsim,
+  ({home:renderHome,map:renderMap,metar:renderMetar,ofp:renderOFP,vatsim:renderVatsim,
     charts:renderCharts,alerts:renderAlerts,ctrl:renderCtrl,settings:renderSettings})[S.tab]?.(m);
 }
 
@@ -571,7 +571,7 @@ const SC=[
   {n:"Spotify",  s:"Music",     c:"#1db954",url:"https://open.spotify.com",          ic:"<circle cx='12' cy='12' r='10'/><path d='M8 11.973c2.5-1.473 5.5-.973 7.5.527M9 15c1.5-1 4.5-.5 6 1M7 9c3-1.5 6-1 9 1'/>"},
   {n:"YT Music", s:"Music",     c:"#ff6b6b",url:"https://music.youtube.com",         ic:"<polygon points='5 3 19 12 5 21 5 3'/>"},
   {n:"Discord",  s:"Crew",      c:"#7c8cff",url:"https://discord.com/app",           ic:"<path d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/>"},
-  {n:"Axesta",   s:"axesta.cx", c:"#5ec8ff",url:"https://skybound.cx",               ic:"<circle cx='12' cy='12' r='10'/><line x1='2' y1='12' x2='22' y2='12'/><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'/>"},
+  {n:"Xdeck EFB",   s:"xdeck.cx", c:"#5ec8ff",url:"https://skybound.cx",               ic:"<circle cx='12' cy='12' r='10'/><line x1='2' y1='12' x2='22' y2='12'/><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'/>"},
 ];
 
 function renderHome(m){
@@ -922,69 +922,184 @@ function renderCtrl(m){
 }
 
 
-// ── SPAWN ──────────────────────────────────────────────────────────
-const AIRCRAFT = [
-  {id:"pmdg737",name:"PMDG 737-800",sub:"Boeing 737NG",color:"#5ec8ff",file:"pmdg737.flt"},
-  {id:"fenix",  name:"Fenix A321",  sub:"Airbus A321", color:"#a78bfa",file:"fenix.flt"},
-  {id:"a32nx",  name:"FlyByWire A32NX",sub:"Airbus A320neo",color:"#52e3b0",file:"a32nx.flt"},
-  {id:"custom", name:"Egyéni...",   sub:"Saját .flt",  color:"#ffb454",file:null},
-];
-let _spawnStatus="",_spawnLoading=false,_customFlt="";
 
-async function doSpawn(file){
-  if(!file){_spawnStatus="❌ Nincs fájl";renderTab();return;}
-  _spawnLoading=true;_spawnStatus="";renderTab();
-  try{
-    const r=await api("/api/spawn",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({file})});
-    _spawnStatus=r.ok?"✅ Repülő betöltve! Ellenőrizd az MSFS-t.":"❌ Hiba: "+(r.error||"ismeretlen");
-  }catch(e){_spawnStatus="❌ Bridge nem fut: "+e.message;}
-  _spawnLoading=false;renderTab();
+// ── METAR ──────────────────────────────────────────────────────────
+let _metarIcao = "";
+let _metarData = null;
+let _metarLoading = false;
+let _metarErr = "";
+
+async function loadMetar(icao) {
+  if(!icao) return;
+  _metarLoading=true; _metarErr=""; _metarData=null;
+  if(S.tab==="metar") renderMetarContent();
+  try {
+    const r = await api("/api/metar?icao="+encodeURIComponent(icao));
+    if(r.error) _metarErr=r.error;
+    else _metarData=r;
+  } catch(e) { _metarErr=e.message; }
+  _metarLoading=false;
+  if(S.tab==="metar") renderMetarContent();
 }
 
-function renderSpawn(m){
-  const sl=el("div","sl anim");sl.textContent="Spawn Aircraft";m.appendChild(sl);
-  if(!S.rtdb){
-    const w=el("div","warn anim");
-    w.innerHTML="⚠ SimBridge nem fut — indítsd el Windowson MSFS mellé.";
-    m.appendChild(w);
+function renderMetarContent(){
+  const m=$("main");
+  if(!m||S.tab!=="metar")return;
+  m.innerHTML=""; m.style.padding="20px 22px";
+  renderMetar(m);
+}
+
+function parseMetar(raw) {
+  if(!raw) return null;
+  const r = {};
+  // Wind: 27015KT or 27015G25KT or VRB05KT
+  const wind = raw.match(/(\d{3}|VRB)(\d{2,3})(G(\d{2,3}))?KT/);
+  if(wind) { r.windDir=wind[1]==="VRB"?"VRB":parseInt(wind[1]); r.windSpd=parseInt(wind[2]); if(wind[4]) r.windGust=parseInt(wind[4]); }
+  // Visibility: 9999 or 8000
+  const vis = raw.match(/(\d{4})/);
+  if(vis) r.vis=parseInt(vis[1]);
+  // Clouds: FEW/SCT/BKN/OVC + height
+  const clouds = [];
+  const cloudRe = /(FEW|SCT|BKN|OVC)(\d{3})/g;
+  let cm;
+  while((cm=cloudRe.exec(raw))!==null) clouds.push({type:cm[1],ft:parseInt(cm[2])*100});
+  r.clouds=clouds;
+  // Temp/dew: 12/08 or M02/M05
+  const td = raw.match(/(M?\d{2})\/(M?\d{2})/);
+  if(td){ r.temp=parseInt(td[1].replace("M","-")); r.dew=parseInt(td[2].replace("M","-")); }
+  // QNH: Q1013 or A2992
+  const q = raw.match(/Q(\d{4})/);
+  if(q) r.qnh=parseInt(q[1]);
+  const a = raw.match(/A(\d{4})/);
+  if(a) r.qnhInHg=(parseInt(a[1])/100).toFixed(2);
+  // Wx: -RA, +SN, TSRA, etc
+  const wx = raw.match(/[-+]?(TS|RA|SN|DZ|FG|BR|HZ|SQ|FC|GR|GS|PL|IC|UP|FU|VA|SA|DU|MIFG|BCFG|PRFG|DRDU|DRSN|BLDU|BLSN|BLSA|VCSH|VCTS|VCFG|VCBLDU|VCBLSN|VCBLSA|VCPO|VCDS|VCSS)+/g);
+  if(wx) r.wx=wx.join(" ");
+  return r;
+}
+
+function windArrow(dir) {
+  if(dir==="VRB") return "↻";
+  const arrows=["↓","↙","←","↖","↑","↗","→","↘"];
+  return arrows[Math.round(((dir+180)%360)/45)%8];
+}
+
+function cloudColor(type) {
+  return {FEW:"var(--gn)",SCT:"var(--am)",BKN:"var(--rd)",OVC:"var(--rd)"}[type]||"var(--dim)";
+}
+
+function renderMetar(m) {
+  const {ofp,cfg}=S;
+  // Auto-set ICAO from OFP if empty
+  if(!_metarIcao && ofp) _metarIcao = ofp.dep||ofp.arr||"";
+
+  const hdr=el("div","flex aic jb anim");hdr.style.marginBottom="10px";
+  const sl=el("div","sl");sl.style.margin="0";sl.textContent="METAR / TAF";
+  hdr.appendChild(sl);m.appendChild(hdr);
+
+  // ICAO input
+  const card=el("div","card anim");
+  const lbl=el("div");lbl.style.cssText="font-size:8px;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:7px";lbl.textContent="Airport ICAO";
+  const row=el("div","flex gap8 aic");
+  const inp=el("input","inp");inp.style.cssText="font-size:20px;letter-spacing:4px;width:120px;text-transform:uppercase";
+  inp.value=_metarIcao;inp.placeholder="LHBP";inp.maxLength=4;
+  inp.addEventListener("input",()=>{_metarIcao=inp.value.toUpperCase();inp.value=_metarIcao;});
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter")loadMetar(_metarIcao);});
+  const loadBtn=el("button","btn btn-cy");loadBtn.textContent=_metarLoading?"↻ ...":"🌤 Betölt";
+  loadBtn.addEventListener("click",()=>loadMetar(_metarIcao));
+  row.appendChild(inp);row.appendChild(loadBtn);
+
+  // Quick select from OFP
+  if(ofp){
+    [ofp.dep,ofp.arr,ofp.altn].filter(Boolean).forEach((ic,i)=>{
+      const b=el("button","pill"+(ic===_metarIcao?" on":""));
+      b.textContent=ic+" "+["DEP","ARR","ALTN"][i];
+      b.style.color=["var(--gn)","var(--cy)","var(--am)"][i];
+      b.addEventListener("click",()=>{_metarIcao=ic;inp.value=ic;loadMetar(ic);});
+      row.appendChild(b);
+    });
   }
-  const info=el("div","card anim");
-  info.innerHTML=`<div style='font-size:11px;color:var(--dim);line-height:1.7'>
-    Mentsd el az MSFS-ben a state-et (<b>Save Flight</b>), majd másold a <code style='background:var(--p2);padding:1px 5px;border-radius:4px'>.flt</code> fájlt a <code style='background:var(--p2);padding:1px 5px;border-radius:4px'>desktop/flights/</code> mappába.
-  </div>`;
-  m.appendChild(info);
-  const grid=el("div","g2 anim");grid.style.marginBottom="12px";
-  AIRCRAFT.forEach(a=>{
-    const tile=el("button","tile");
-    tile.style.borderColor=a.color+"22";
-    const top=el("div","flex aic gap8");top.style.marginBottom="9px";
-    const ic=el("div","tile-ic");ic.style.cssText=`color:${a.color};width:32px;height:32px`;
-    ic.innerHTML=`<svg viewBox='0 0 24 24'><path d='M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z'/></svg>`;
-    const txt=el("div");
-    txt.innerHTML=`<div style='font-size:13px;font-weight:700;color:var(--tx)'>${a.name}</div><div style='font-size:10px;color:var(--dim)'>${a.sub}</div>`;
-    top.appendChild(ic);top.appendChild(txt);
-    const bot=el("div","flex aic jb");
-    const fn=el("span");fn.style.cssText="font-size:9px;color:var(--dim);font-family:var(--mono)";fn.textContent=a.file||"válassz...";
-    const badge=el("span");badge.style.cssText=`font-size:9px;padding:2px 7px;border-radius:99px;background:${a.color}18;border:1px solid ${a.color}35;color:${a.color};font-weight:700`;badge.textContent=a.file?"KÉSZ":"CUSTOM";
-    bot.appendChild(fn);bot.appendChild(badge);
-    tile.appendChild(top);tile.appendChild(bot);
-    if(a.id==="custom"){
-      tile.addEventListener("click",()=>{
-        const fn2=prompt("Fájlnév:",_customFlt||"sajat.flt");
-        if(fn2){_customFlt=fn2;doSpawn(fn2);}
-      });
-    }else{
-      tile.addEventListener("click",()=>doSpawn(a.file));
+  card.appendChild(lbl);card.appendChild(row);m.appendChild(card);
+
+  if(_metarErr){const e=el("div","err");e.textContent="⚠ "+_metarErr;m.appendChild(e);}
+  if(_metarLoading){const l=el("div","warn");l.textContent="⏳ Betöltés...";m.appendChild(l);return;}
+  if(!_metarData)return;
+
+  const items = Array.isArray(_metarData) ? _metarData : [_metarData];
+
+  items.forEach((item,idx2)=>{
+    const raw = item.rawOb||item.raw_text||item.raw||"";
+    const p = parseMetar(raw);
+    if(!p&&!raw) return;
+
+    const card2=el("div","card anim");card2.style.animationDelay=(idx2*50)+"ms";
+
+    // Station + time header
+    const stHdr=el("div","flex aic jb");stHdr.style.marginBottom="10px";
+    const stName=el("div");
+    stName.innerHTML=`<div style='font-size:16px;font-weight:800;font-variant-numeric:tabular-nums'>${item.stationId||item.station_id||_metarIcao}</div>
+      <div style='font-size:9px;color:var(--dim);margin-top:2px'>${item.observationTime||item.observation_time||""}</div>`;
+    const flightCat=el("div");
+    const cat=item.flightCategory||item.flight_category||"";
+    const catCol={VFR:"var(--gn)",MVFR:"var(--cy)",IFR:"var(--am)",LIFR:"var(--rd)"}[cat]||"var(--dim)";
+    if(cat) flightCat.innerHTML=`<span style='border-radius:8px;padding:4px 10px;font-size:12px;font-weight:800;background:${catCol}18;border:1px solid ${catCol}38;color:${catCol}'>${cat}</span>`;
+    stHdr.appendChild(stName);stHdr.appendChild(flightCat);
+    card2.appendChild(stHdr);
+
+    // Wind
+    if(p?.windDir!==undefined){
+      const wRow=el("div","flex aic gap8");wRow.style.marginBottom="8px";
+      const wIcon=el("div");wIcon.style.cssText="font-size:28px;width:36px;text-align:center";wIcon.textContent=windArrow(p.windDir);
+      const wInfo=el("div");
+      const gustStr=p.windGust?` G${p.windGust}`:"";
+      wInfo.innerHTML=`<div style='font-size:20px;font-weight:700;font-variant-numeric:tabular-nums'>${p.windDir==="VRB"?"VRB":p.windDir+"°"} ${p.windSpd}${gustStr} kt</div>
+        <div style='font-size:9px;color:var(--dim)'>${p.windDir==="VRB"?"Variable wind":"Wind direction"}</div>`;
+      wRow.appendChild(wIcon);wRow.appendChild(wInfo);
+      card2.appendChild(wRow);
     }
-    grid.appendChild(tile);
+
+    // Stats grid
+    const grid=el("div","g2");grid.style.gap="6px";grid.style.marginBottom="8px";
+    const stats=[
+      ["Látás", p?.vis!=null?(p.vis>=9999?"10+ km":p.vis+"m"):null, "var(--tx)"],
+      ["QNH", p?.qnh?p.qnh+" hPa"+(p.qnhInHg?" / "+p.qnhInHg+""":""):null, "var(--cy)"],
+      ["Hőmérséklet", p?.temp!=null?p.temp+"°C":null, p?.temp<0?"var(--cy)":"var(--am)"],
+      ["Harmatpont", p?.dew!=null?p.dew+"°C":null, "var(--dim)"],
+    ];
+    stats.forEach(([l,v,ac])=>{
+      if(!v) return;
+      const d=el("div");d.style.cssText="display:flex;justify-content:space-between;padding:6px 9px;background:var(--p2);border-radius:7px;border:1px solid var(--line)";
+      d.innerHTML=`<span style='font-size:10px;color:var(--dim)'>${l}</span><span style='font-size:12px;font-variant-numeric:tabular-nums;color:${ac}'>${v}</span>`;
+      grid.appendChild(d);
+    });
+    card2.appendChild(grid);
+
+    // Clouds
+    if(p?.clouds?.length){
+      const cDiv=el("div","flex gap6");cDiv.style.marginBottom="8px";
+      p.clouds.forEach(cl=>{
+        const b=el("div");b.style.cssText=`padding:4px 10px;border-radius:7px;font-size:11px;font-weight:700;background:${cloudColor(cl.type)}18;border:1px solid ${cloudColor(cl.type)}35;color:${cloudColor(cl.type)}`;
+        b.textContent=`${cl.type} ${cl.ft.toLocaleString()}ft`;
+        cDiv.appendChild(b);
+      });
+      card2.appendChild(cDiv);
+    }
+
+    // Wx phenomena
+    if(p?.wx){
+      const wx=el("div");wx.style.cssText="font-size:12px;color:var(--am);margin-bottom:8px;font-weight:600";
+      wx.textContent="⚠ "+p.wx;card2.appendChild(wx);
+    }
+
+    // Raw METAR
+    const rawDiv=el("div");rawDiv.style.cssText="font-family:var(--mono);font-size:10px;color:var(--dim);padding:8px 10px;background:var(--bg);border-radius:7px;border:1px solid var(--line);line-height:1.6;word-break:break-all";
+    rawDiv.textContent=raw;card2.appendChild(rawDiv);
+
+    m.appendChild(card2);
   });
-  m.appendChild(grid);
-  if(_spawnLoading){const ld=el("div","warn");ld.textContent="⏳ Betöltés...";m.appendChild(ld);}
-  if(_spawnStatus){
-    const st=el("div","card");
-    st.style.cssText="border-color:"+((_spawnStatus.startsWith("✅"))?"rgba(82,227,176,.3)":"rgba(240,96,128,.3)")+";color:"+(_spawnStatus.startsWith("✅")?"var(--gn)":"var(--rd)")+";font-size:12px;font-weight:600";
-    st.textContent=_spawnStatus;m.appendChild(st);
-  }
+
+  // Auto-load DEP on first visit
+  if(!_metarData&&!_metarLoading&&_metarIcao) loadMetar(_metarIcao);
 }
 
 // ── SETTINGS ──────────────────────────────────────────────────────
@@ -1221,7 +1336,7 @@ auth.onAuthStateChanged(async user=>{
       const u=await api("/api/update");
       if(u&&u.update){
         const b=el("div");b.style.cssText="position:fixed;top:0;left:0;right:0;padding:7px 18px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,180,84,.94);color:#06070c;font-size:11px;font-weight:700;z-index:50;animation:fadeIn var(--mid) var(--ease)";
-        b.innerHTML=`🆕 Axesta ${u.codename||""} elérhető`;
+        b.innerHTML=`🆕 Xdeck EFB ${u.codename||""} elérhető`;
         const btns=el("div","flex gap6");
         if(u.url){const lb=el("button");lb.style.cssText="background:rgba(0,0,0,.15);border:none;border-radius:5px;padding:2px 10px;cursor:pointer;font-size:10px;color:#06070c;font-weight:700";lb.textContent="Letöltés";lb.addEventListener("click",()=>openUrl(u.url));btns.appendChild(lb);}
         const cb=el("button");cb.style.cssText="background:rgba(0,0,0,.12);border:none;border-radius:5px;padding:2px 8px;cursor:pointer;font-size:10px;color:#06070c";cb.textContent="✕";cb.addEventListener("click",()=>b.remove());btns.appendChild(cb);b.appendChild(btns);document.body.appendChild(b);
