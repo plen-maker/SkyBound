@@ -7,14 +7,15 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "start:fsuipc": "SIM_MODE=fsuipc7 node src/index.js",
-    "start:simconnect": "SIM_MODE=simconnect node src/index.js"
+    "start:fsuipc": "cross-env SIM_MODE=fsuipc7 node src/index.js",
+    "start:simconnect": "cross-env SIM_MODE=simconnect node src/index.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
     "firebase-admin": "^12.7.0",
     "node-simconnect": "^3.2.0",
-    "fsuipc": "^1.0.3"
+    "fsuipc": "^0.7.3",
+    "cross-env": "^7.0.3"
   },
   "engines": { "node": ">=18" }
 }
