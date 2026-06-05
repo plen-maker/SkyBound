@@ -16,7 +16,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#08090e"
       },
-      "package": "sxa.skybound.efb",
+      "package": "cx.xdeck.efb",
       "versionCode": 1,
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
@@ -31,9 +31,8 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "8e644485-35c0-47cc-a9c6-68e288e5626c"
+        "projectId": "xdeck-efb"
       }
-    },
-    "owner": "ddnemet"
+    }
   }
 }
