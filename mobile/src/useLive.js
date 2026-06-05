@@ -1,29 +1,29 @@
-import { useEffect, useState, useCallback } from "react";
-import { db, ref, onValue, push, remove, update } from "./firebase";
-
-const SESSION = "ddnemet-host";
+import { useState, useEffect } from 'react';
+import { ref, onValue } from 'firebase/database';
+import { db } from './firebase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export function useLive() {
-  const [live,      setLive]  = useState(null);
-  const [connected, setConn]  = useState(false);
-  useEffect(() => {
-    const u1 = onValue(ref(db, `sessions/${SESSION}/live`), s => setLive(s.val()));
-    const u2 = onValue(ref(db, ".info/connected"), s => setConn(s.val() === true));
-    return () => { u1(); u2(); };
-  }, []);
-  return { live, connected };
-}
+  const [live, setLive] = useState(null);
+  const [rtdb, setRtdb] = useState(false);
+  const [sessionCode, setSessionCode] = useState('ddnemet-host');
 
-export function useTriggers() {
-  const [triggers, setTriggers] = useState([]);
   useEffect(() => {
-    return onValue(ref(db, `sessions/${SESSION}/triggers`), s => {
-      const v = s.val();
-      setTriggers(v ? Object.entries(v).map(([id,d]) => ({id,...d})) : []);
-    });
+    AsyncStorage.getItem('sessionCode').then(v => { if (v) setSessionCode(v); });
   }, []);
-  const add    = useCallback(t  => push(ref(db,`sessions/${SESSION}/triggers`),{armed:true,...t}), []);
-  const del    = useCallback(id => remove(ref(db,`sessions/${SESSION}/triggers/${id}`)), []);
-  const toggle = useCallback((id,a) => update(ref(db,`sessions/${SESSION}/triggers/${id}`),{armed:a}), []);
-  return { triggers, add, del, toggle };
+
+  useEffect(() => {
+    if (!sessionCode) return;
+    let lt;
+    const r1 = ref(db, `sessions/${sessionCode}/live`);
+    const u1 = onValue(r1, s => {
+      clearTimeout(lt);
+      lt = setTimeout(() => setLive(s.val()), 200);
+    }, () => {});
+    const r2 = ref(db, '.info/connected');
+    const u2 = onValue(r2, s => setRtdb(s.val() === true), () => {});
+    return () => { u1(); u2(); clearTimeout(lt); };
+  }, [sessionCode]);
+
+  return { live, rtdb, sessionCode, setSessionCode };
 }
