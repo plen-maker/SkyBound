@@ -1,6 +1,7 @@
 """Axesta EFB — PyWebView + Flask"""
 import webview, threading, os, sys, json, argparse
 import requests as req
+import subprocess, signal, psutil
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
@@ -128,6 +129,73 @@ def metar():
         return jsonify(data)
     except Exception as e:
         return jsonify({"error":str(e)})
+
+
+_bridge_proc = None
+
+@app.route("/api/bridge/status")
+def bridge_status():
+    global _bridge_proc
+    if _bridge_proc and _bridge_proc.poll() is None:
+        return jsonify({"running": True, "pid": _bridge_proc.pid})
+    _bridge_proc = None
+    return jsonify({"running": False})
+
+@app.route("/api/bridge/start", methods=["POST"])
+def bridge_start():
+    global _bridge_proc
+    if _bridge_proc and _bridge_proc.poll() is None:
+        return jsonify({"ok": True, "already": True})
+    bridge_dir = os.path.join(os.path.dirname(BASE), "bridge")
+    env_file = os.path.join(bridge_dir, ".env")
+    if not os.path.exists(bridge_dir):
+        return jsonify({"error": "Bridge mappa nem található: " + bridge_dir})
+    if not os.path.exists(env_file):
+        return jsonify({"error": ".env fájl hiányzik a bridge mappából"})
+    try:
+        node = "node.exe" if os.name == "nt" else "node"
+        _bridge_proc = subprocess.Popen(
+            [node, "src/index.js", "--simconnect"],
+            cwd=bridge_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+        return jsonify({"ok": True, "pid": _bridge_proc.pid})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route("/api/bridge/stop", methods=["POST"])
+def bridge_stop():
+    global _bridge_proc
+    if _bridge_proc and _bridge_proc.poll() is None:
+        try:
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/F", "/PID", str(_bridge_proc.pid)], capture_output=True)
+            else:
+                _bridge_proc.terminate()
+            _bridge_proc = None
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"error": str(e)})
+    return jsonify({"ok": True, "already": True})
+
+@app.route("/api/bridge/log")
+def bridge_log():
+    global _bridge_proc
+    if not _bridge_proc:
+        return jsonify({"log": ""})
+    try:
+        import io
+        lines = []
+        while True:
+            line = _bridge_proc.stdout.readline()
+            if not line: break
+            lines.append(line.decode("utf-8", errors="replace").strip())
+            if len(lines) > 50: break
+        return jsonify({"log": "\n".join(lines)})
+    except:
+        return jsonify({"log": ""})
 
 @app.route("/api/update")
 def update():
