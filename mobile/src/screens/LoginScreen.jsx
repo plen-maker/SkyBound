@@ -4,7 +4,7 @@ import {
   getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
 } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { C } from "../theme";
+import { THEME as C } from "../theme";
 
 const auth = getAuth();
 
