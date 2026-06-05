@@ -29,22 +29,24 @@ jobs:
         shell: pwsh
         run: |
           $v = Get-Content desktop/version.json | ConvertFrom-Json
+          $tag = "$($v.codename)-$($v.version)"
           echo "codename=$($v.codename)" >> $env:GITHUB_OUTPUT
           echo "version=$($v.version)" >> $env:GITHUB_OUTPUT
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: axesta-win
-          path: dist/Axesta.exe
-
-      - name: Update latest release
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: "Axesta ${{ steps.ver.outputs.codename }} · ${{ steps.ver.outputs.version }}"
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: "Axesta ${{ steps.ver.outputs.codename }} · v${{ steps.ver.outputs.version }}"
           files: dist/Axesta.exe
           make_latest: true
+          body: |
+            ## Axesta ${{ steps.ver.outputs.codename }} · v${{ steps.ver.outputs.version }}
+            
+            Windows desktop build — automatikusan generálva.
+            
+            **Letöltés:** `Axesta.exe` alább.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -95,13 +97,23 @@ jobs:
       - name: Rename APK
         shell: bash
         run: |
+          SRC=mobile/android/app/build/outputs/apk/release
           if [ -f "${{ steps.sign.outputs.signedReleaseFile }}" ]; then
-            mv "${{ steps.sign.outputs.signedReleaseFile }}" mobile/android/app/build/outputs/apk/release/SkyBound.apk
+            mv "${{ steps.sign.outputs.signedReleaseFile }}" $SRC/SkyBound.apk
           else
-            cp mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk mobile/android/app/build/outputs/apk/release/SkyBound.apk
+            cp $SRC/app-release-unsigned.apk $SRC/SkyBound.apk
           fi
 
-      - uses: actions/upload-artifact@v4
+      - name: Get version
+        id: ver2
+        run: |
+          TAG=$(node -e "const v=require('./desktop/version.json');console.log(v.codename+'-'+v.version)")
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Upload APK to Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: skybound-apk
-          path: mobile/android/app/build/outputs/apk/release/SkyBound.apk
+          tag_name: ${{ steps.ver2.outputs.tag }}
+          files: mobile/android/app/build/outputs/apk/release/SkyBound.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
