@@ -18,7 +18,6 @@ export function writeLive(sessionCode, telemetry, derived) {
   return db.ref(`sessions/${sessionCode}/live`).set({ ...telemetry, ...derived, ts: Date.now() });
 }
 
-// Clear live data when bridge stops
 export function clearLive(sessionCode) {
   return db.ref(`sessions/${sessionCode}/live`).remove();
 }
@@ -33,17 +32,35 @@ export function watchTriggers(sessionCode, cb) {
 export async function deviceTokens(sessionCode) {
   const snap = await db.ref(`sessions/${sessionCode}/devices`).once("value");
   const v = snap.val();
-  return v ? Object.values(v).map(d=>d.fcmToken).filter(Boolean) : [];
+  if (!v) return [];
+  return Object.values(v).map(d => d.fcmToken).filter(Boolean);
 }
 
 export async function pushToDevices(sessionCode, { title, body, data = {} }) {
   const tokens = await deviceTokens(sessionCode);
-  if (!tokens.length) return { sent: 0 };
+  if (!tokens.length) {
+    console.log(`[fb] push "${title}" — nincs eszköz`);
+    return { sent: 0 };
+  }
+
+  // Send via FCM
   const r = await messaging.sendEachForMulticast({
-    tokens, notification: { title, body },
+    tokens,
+    notification: { title, body },
     data: Object.fromEntries(Object.entries(data).map(([k,v])=>[k,String(v)])),
-    android: { priority: "high" },
-    apns: { payload: { aps: { sound: "default" } } },
+    android: {
+      priority: "high",
+      notification: {
+        channelId: "default",
+        sound: "default",
+        priority: "max",
+        vibrateTimingsMillis: [0, 250, 250, 250],
+      },
+    },
+    apns: {
+      payload: { aps: { sound: "default", badge: 1 } },
+      headers: { "apns-priority": "10" },
+    },
   });
   console.log(`[fb] push "${title}" → ${r.successCount}/${tokens.length}`);
   return { sent: r.successCount };
