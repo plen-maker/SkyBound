@@ -55,6 +55,15 @@ jobs:
           python-version: "3.11"
       - name: Install deps
         run: pip install pillow
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Build bridge EXE
+        working-directory: bridge
+        shell: pwsh
+        run: |
+          npm install --omit=optional
+          npx --yes @yao-pkg/pkg . --target node18-win-x64 --no-bytecode --public --output ../dist/bridge.exe
       - name: Generate assets
         shell: pwsh
         run: |

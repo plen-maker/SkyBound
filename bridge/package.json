@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
+  "bin": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
@@ -17,5 +18,11 @@
   "optionalDependencies": {
     "fsuipc": "^0.7.3"
   },
-  "engines": { "node": ">=18" }
+  "engines": { "node": ">=18" },
+  "pkg": {
+    "assets": [
+      "node_modules/node-simconnect/prebuilds/**/*",
+      "node_modules/node-simconnect/build/Release/*.node"
+    ]
+  }
 }
