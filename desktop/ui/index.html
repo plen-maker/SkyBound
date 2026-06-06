@@ -2,6 +2,7 @@
 <html lang="hu">
 <head>
 <meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <title>Xdeck EFB</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
@@ -274,6 +275,24 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--tx);font-
 }
 .lo-icon svg{width:25px;height:25px;stroke:#06070c;fill:none;stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}
 
+/* ── Dev panel overlay ── */
+#devpanel{
+  position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.7);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  animation:fadeIn var(--mid) var(--ease)
+}
+#devpanel.open{display:flex}
+.dp-box{
+  background:var(--panel);border:1px solid rgba(255,180,84,.25);border-radius:16px;
+  padding:22px;width:480px;max-width:94vw;max-height:90vh;overflow-y:auto;
+  box-shadow:0 24px 80px rgba(0,0,0,.6)
+}
+.dp-title{font-size:14px;font-weight:700;color:var(--am);margin-bottom:18px;display:flex;align-items:center;justify-content:space-between}
+.dp-sect{font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin:14px 0 8px}
+.dp-field{margin-bottom:8px}
+.dp-field label{font-size:10px;color:var(--dim);display:block;margin-bottom:4px}
+.dp-field input,.dp-field select{width:100%}
+
 /* ── Map ── */
 .map-wrap{border-radius:12px;overflow:hidden;border:1px solid var(--line)}
 
@@ -291,6 +310,17 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--tx);font-
 </style>
 </head>
 <body>
+
+<!-- Dev panel overlay -->
+<div id="devpanel">
+  <div class="dp-box">
+    <div class="dp-title">
+      <span>⚙ Developer Panel</span>
+      <button onclick="document.getElementById('devpanel').classList.remove('open')" style="background:none;border:none;cursor:pointer;color:var(--dim);font-size:16px;padding:0 4px">✕</button>
+    </div>
+    <div id="dpContent"></div>
+  </div>
+</div>
 
 <!-- Browser overlay -->
 <div id="browser">
@@ -386,7 +416,7 @@ const auth=firebase.auth(), db=firebase.database();
 
 // ── State ──────────────────────────────────────────────────────────
 const S={
-  tab:"home", user:null,
+  tab:"home", user:null, isDev:false,
   cfg:{
     sbUser:"ddnemet", fenixUrl:"", sessionCode:"ddnemet-host",
     theme:"dark", ofpMode:"simplified", gridCols:"4",
@@ -578,6 +608,7 @@ const TABS=[
   {id:"charts",l:"Charts",svg:"<rect x='3' y='3' width='7' height='7'/><rect x='14' y='3' width='7' height='7'/><rect x='14' y='14' width='7' height='7'/><rect x='3' y='14' width='7' height='7'/>"},
   {id:"alerts",l:"Alerts",svg:"<path d='M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9'/><path d='M13.73 21a2 2 0 0 1-3.46 0'/>"},
   {id:"ctrl",l:"Ctrl",svg:"<rect x='2' y='6' width='20' height='12' rx='2'/><path d='M12 12h.01'/><path d='M17 12h.01'/><path d='M7 12h.01'/>"},
+  {id:"bridge",l:"Bridge",svg:"<path d='M18 20V10'/><path d='M12 20V4'/><path d='M6 20v-6'/>"},
   {id:"settings",l:"Settings",svg:"<circle cx='12' cy='12' r='3'/><path d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z'/>"},
 ];
 
@@ -604,7 +635,7 @@ function renderTab(){
   if(S.tab!=="map")window._lfMap=null;
   m.innerHTML="";m.style.padding="20px 22px";m.style.overflow="auto";
   ({home:renderHome,map:renderMap,metar:renderMetar,ofp:renderOFP,vatsim:renderVatsim,
-    charts:renderCharts,alerts:renderAlerts,ctrl:renderCtrl,settings:renderSettings})[S.tab]?.(m);
+    charts:renderCharts,alerts:renderAlerts,ctrl:renderCtrl,bridge:renderBridge,settings:renderSettings})[S.tab]?.(m);
 }
 
 // ── HOME ───────────────────────────────────────────────────────────
@@ -683,6 +714,15 @@ function renderHome(m){
     });
   }else{const nd=el("div");nd.style.cssText="font-size:11px;color:var(--dim)";nd.textContent="Nincs OFP betöltve.";od.appendChild(nd);}
   bot.appendChild(md);bot.appendChild(od);m.appendChild(bot);
+
+  // Developer gomb
+  if(S.isDev){
+    const devBtn=el("button","btn anim");
+    devBtn.style.cssText="margin-top:10px;background:rgba(255,180,84,.1);border:1px solid rgba(255,180,84,.25);color:var(--am);font-size:11px;padding:7px 16px;width:100%";
+    devBtn.textContent="⚙ Developer Panel";
+    devBtn.addEventListener("click",openDevPanel);
+    m.appendChild(devBtn);
+  }
 }
 
 // ── MAP ────────────────────────────────────────────────────────────
@@ -1139,6 +1179,228 @@ function renderMetar(m) {
   if(!_metarData&&!_metarLoading&&_metarIcao) loadMetar(_metarIcao);
 }
 
+// ── BRIDGE TAB ────────────────────────────────────────────────────
+async function renderBridge(m){
+  const hdr=el("div","sl anim");hdr.textContent="Bridge konfiguráció";m.appendChild(hdr);
+
+  // Status card
+  const sc=el("div","card anim");sc.style.marginBottom="8px";
+  const srow2=el("div","flex aic jb");
+  const stTxt=el("div");
+  stTxt.innerHTML=`<div class='slabel'>SimBridge státusz</div><div class='sdesc' id='bStatusDesc'>Ellenőrzés...</div>`;
+  const stBtn=el("button","btn");stBtn.id="bToggleBtn";stBtn.style.fontSize="11px";stBtn.style.padding="6px 14px";
+  stBtn.textContent="...";
+  stBtn.addEventListener("click",async()=>{
+    if(S.bridge.running){
+      await api("/api/bridge/stop",{method:"POST"});
+    }else{
+      const r=await api("/api/bridge/start",{method:"POST"});
+      if(r.error){alert(r.error);return;}
+    }
+    setTimeout(refreshBridgeStatus,600);
+  });
+  srow2.appendChild(stTxt);srow2.appendChild(stBtn);sc.appendChild(srow2);
+  m.appendChild(sc);
+
+  async function refreshBridgeStatus(){
+    const r=await api("/api/bridge/status");
+    S.bridge.running=r.running;
+    const desc=document.getElementById("bStatusDesc");
+    const btn=document.getElementById("bToggleBtn");
+    if(desc)desc.textContent=r.running?`Fut — PID ${r.pid}`:"Leállítva";
+    if(btn){btn.textContent=r.running?"⏹ Stop":"▶ Start";
+      btn.style.background=r.running?"rgba(240,96,128,.12)":"rgba(82,227,176,.12)";
+      btn.style.border=r.running?"1px solid rgba(240,96,128,.3)":"1px solid rgba(82,227,176,.3)";
+      btn.style.color=r.running?"var(--rd)":"var(--gn)";}
+  }
+  refreshBridgeStatus();
+
+  // .env editor
+  const envCard=el("div","card anim");envCard.style.animationDelay="60ms";
+  const envHdr=el("div","sl");envHdr.textContent="Bridge paraméterek (.env)";envCard.appendChild(envHdr);
+
+  const envData=await api("/api/bridge/env");
+  const fields=[
+    {key:"SKYBOUND_SESSION",label:"Session kód (Host ID)",placeholder:"pl. ddnemet-host",w:"100%"},
+    {key:"SIMBRIEF_USERNAME",label:"SimBrief usernév",placeholder:"pl. ddnemet",w:"100%"},
+    {key:"FIREBASE_SERVICE_ACCOUNT",label:"Service account útvonal",placeholder:"./serviceAccount.json",w:"100%"},
+  ];
+  const vals={};
+  fields.forEach(f=>{
+    const row=el("div");row.style.marginBottom="10px";
+    const lbl=el("label");lbl.style.cssText="font-size:10px;color:var(--dim);display:block;margin-bottom:4px";lbl.textContent=f.label;
+    const inp=el("input","inp");inp.style.width=f.w;inp.value=envData[f.key]||"";inp.placeholder=f.placeholder;
+    vals[f.key]=inp;
+    row.appendChild(lbl);row.appendChild(inp);envCard.appendChild(row);
+  });
+
+  // SIM_MODE select
+  const modeRow=el("div");modeRow.style.marginBottom="10px";
+  const modeLbl=el("label");modeLbl.style.cssText="font-size:10px;color:var(--dim);display:block;margin-bottom:4px";modeLbl.textContent="Szimulátor mód";
+  const modeSel=el("select","inp");modeSel.style.width="100%";
+  [["auto","Auto (FSUIPC → SimConnect)"],["simconnect","SimConnect"],["fsuipc","FSUIPC7"]].forEach(([v,l])=>{
+    const o=el("option");o.value=v;o.textContent=l;if((envData["SIM_MODE"]||"auto")===v)o.selected=true;modeSel.appendChild(o);
+  });
+  modeRow.appendChild(modeLbl);modeRow.appendChild(modeSel);envCard.appendChild(modeRow);
+
+  const saveRow=el("div","flex aic gap8");saveRow.style.marginTop="4px";
+  const saveBtn=el("button","btn btn-cy");saveBtn.style.cssText="font-size:11px;padding:7px 16px";saveBtn.textContent="💾 Mentés";
+  const savedMsg=el("span");savedMsg.style.cssText="font-size:10px;color:var(--gn);opacity:0;transition:opacity 0.4s";savedMsg.textContent="✓ Elmentve";
+  saveBtn.addEventListener("click",async()=>{
+    const data={};
+    fields.forEach(f=>{data[f.key]=vals[f.key].value;});
+    data["SIM_MODE"]=modeSel.value;
+    const r=await api("/api/bridge/env",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+    if(r.error){alert("Hiba: "+r.error);return;}
+    savedMsg.style.opacity="1";setTimeout(()=>{savedMsg.style.opacity="0";},2000);
+    if(S.bridge.running){
+      await api("/api/bridge/stop",{method:"POST"});
+      setTimeout(async()=>{await api("/api/bridge/start",{method:"POST"});setTimeout(refreshBridgeStatus,600);},500);
+    }
+  });
+  saveRow.appendChild(saveBtn);saveRow.appendChild(savedMsg);envCard.appendChild(saveRow);
+  m.appendChild(envCard);
+
+  // Log
+  const logCard=el("div","card anim");logCard.style.animationDelay="120ms";
+  const logHdr=el("div","flex aic jb");logHdr.style.marginBottom="8px";
+  const logTitle=el("div","sl");logTitle.style.marginBottom="0";logTitle.textContent="Bridge log";
+  const logRefBtn=el("button","btn btn-dk");logRefBtn.style.cssText="font-size:10px;padding:4px 10px";logRefBtn.textContent="↺ Frissít";
+  logHdr.appendChild(logTitle);logHdr.appendChild(logRefBtn);logCard.appendChild(logHdr);
+  const logBox=el("div");logBox.style.cssText="font-family:var(--mono);font-size:10px;color:var(--dim);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 10px;min-height:60px;max-height:180px;overflow-y:auto;line-height:1.6;white-space:pre-wrap";
+  logBox.textContent="—";
+  async function refreshLog(){
+    const r=await api("/api/bridge/log");
+    logBox.textContent=r.log||"(üres)";
+  }
+  logRefBtn.addEventListener("click",refreshLog);
+  if(S.bridge.running)refreshLog();
+  logCard.appendChild(logBox);m.appendChild(logCard);
+
+  // Tutorial
+  const tutCard=el("div","card anim");tutCard.style.animationDelay="180ms";tutCard.style.borderColor="rgba(94,200,255,.07)";
+  const tutHdr=el("div","flex aic jb");tutHdr.style.cssText="cursor:pointer;user-select:none";
+  const tutTitle=el("div");tutTitle.innerHTML=`<div class='sl' style='margin-bottom:0'>Beállítási útmutató</div>`;
+  const tutArrow=el("span");tutArrow.style.cssText="color:var(--dim);font-size:14px;transition:transform 0.3s";tutArrow.textContent="›";
+  tutHdr.appendChild(tutTitle);tutHdr.appendChild(tutArrow);tutCard.appendChild(tutHdr);
+  const tutBody=el("div");tutBody.style.cssText="display:none;margin-top:14px";
+  const steps=[
+    ["1","Node.js telepítése",
+      "Töltsd le és telepítsd a Node.js LTS verzióját: <b>nodejs.org</b> → LTS gomb. Telepítés után nyiss egy terminált és ellenőrizd:<br><code style='color:var(--cy)'>node --version</code><br>Ha verziószámot ír ki (pl. v20.x.x), rendben van."],
+
+    ["2","Firebase service account elhelyezése",
+      "A bridge-nek szüksége van a Firebase admin kulcsra. A fájl neve: <code style='color:var(--cy)'>serviceAccount.json</code><br>"+
+      "Helyezd el ide: <code style='color:var(--cy)'>C:\\Program Files\\Xdeck EFB\\bridge\\serviceAccount.json</code><br>"+
+      "<b style='color:var(--am)'>⚠ Ezt a fájlt ne oszd meg senkivel — teljes admin hozzáférést ad a Firebase-hez.</b><br><br>"+
+      "Ha elveszett vagy nincs meg: Firebase Console → fogaskerék → <b>Project Settings → Service accounts → Generate new private key</b> → letölt egy JSON fájlt → nevezd át <code style='color:var(--cy)'>serviceAccount.json</code>-ra."],
+
+    ["3","Bridge paraméterek beállítása",
+      "Az oldal tetején lévő <b>Bridge paraméterek</b> szekcióban töltsd ki:<br>"+
+      "• <b>Session kód:</b> egyedi azonosító, pl. <code style='color:var(--cy)'>ddnemet-host</code> — ezt kell megadnod a mobil appban is<br>"+
+      "• <b>SimBrief usernév:</b> a SimBrief pilotID-d (Dispatch.simbrief.com → My Account)<br>"+
+      "• <b>Service account útvonal:</b> <code style='color:var(--cy)'>./serviceAccount.json</code> (ha a bridge mappában van)<br>"+
+      "• <b>Szimulátor mód:</b> Auto — először ezt próbáld, FSUIPC7-et csak akkor válassz ha az van<br>"+
+      "Kattints <b>💾 Mentés</b>."],
+
+    ["4","Bridge indítása és ellenőrzés",
+      "Kattints a <b>▶ Start</b> gombra. A státusz zöldre vált és kiírja a PID számot.<br>"+
+      "Ha hiba jelenik meg:<br>"+
+      "• <code style='color:var(--rd)'>node not found</code> → Node.js nincs telepítve vagy nincs PATH-ban<br>"+
+      "• <code style='color:var(--rd)'>.env fájl hiányzik</code> → mentsd el a paramétereket előbb<br>"+
+      "• <code style='color:var(--rd)'>serviceAccount error</code> → a JSON fájl nem ott van ahol megadtad<br>"+
+      "• <code style='color:var(--rd)'>SimConnect error</code> → MSFS nincs futva vagy SimConnect nincs engedélyezve<br>"+
+      "A log szekcióban (↺ Frissít) látod a részleteket."],
+
+    ["5","Mobil app csatlakoztatása",
+      "Android appban → <b>Settings</b>:<br>"+
+      "① <b>Session kód</b>: ugyanaz mint amit a bridge paraméterekben megadtál<br>"+
+      "② <b>SimBrief usernév</b>: ugyanaz<br>"+
+      "③ <b>Push értesítések</b>: Be<br>"+
+      "Ha a bridge fut és a session kód egyezik, a Home képernyőn megjelenik a <b>LIVE</b> jelzés és a valós idejű adatok."],
+
+    ["6","Push értesítések — Alerts beállítása",
+      "Desktop appban → <b>Alerts</b> fül. Háromféle trigger van:<br>"+
+      "• <b>Fix crossing</b>: megadsz egy waypoint nevet (pl. BATOX) és hány perccel előtte küldjön értesítést<br>"+
+      "• <b>T/D (Top of Descent)</b>: N perccel az ereszkedés kezdete előtt<br>"+
+      "• <b>Landing</b>: N perccel a célállomás előtt<br>"+
+      "A trigger arméd állapotba kerül → a bridge figyeli → mikor teljesül a feltétel, FCM push megy a telefonra (hang + vibráció)."],
+  ];
+  steps.forEach(([n,title,desc])=>{
+    const row=el("div");row.style.cssText="display:flex;gap:12px;margin-bottom:14px";
+    const num=el("div");num.style.cssText="width:22px;height:22px;border-radius:50%;background:rgba(94,200,255,.1);border:1px solid rgba(94,200,255,.2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--cy);flex-shrink:0;align-self:flex-start;margin-top:2px";num.textContent=n;
+    const txt=el("div");txt.style.flex="1";
+    txt.innerHTML=`<div style='font-size:12px;font-weight:600;color:var(--tx);margin-bottom:3px'>${title}</div><div style='font-size:11px;color:var(--dim);line-height:1.6'>${desc}</div>`;
+    row.appendChild(num);row.appendChild(txt);tutBody.appendChild(row);
+  });
+  tutCard.appendChild(tutBody);
+  tutHdr.addEventListener("click",()=>{
+    const open=tutBody.style.display!=="none";
+    tutBody.style.display=open?"none":"block";
+    tutArrow.style.transform=open?"":"rotate(90deg)";
+  });
+  m.appendChild(tutCard);
+}
+
+// ── DEV PANEL ─────────────────────────────────────────────────────
+async function openDevPanel(){
+  const dp=document.getElementById("devpanel");
+  const content=document.getElementById("dpContent");
+  if(!dp||!content)return;
+  dp.classList.add("open");
+  content.innerHTML="<div style='color:var(--dim);font-size:11px'>Betöltés...</div>";
+
+  // Read current releases/latest from RTDB
+  let rel={};
+  try{
+    const snap=await db.ref("releases/latest").once("value");
+    rel=snap.val()||{};
+  }catch(e){content.innerHTML=`<div style='color:var(--rd);font-size:11px'>Firebase hiba: ${e.message}</div>`;return;}
+
+  content.innerHTML="";
+  function dpField(label,key,placeholder,val){
+    const d=el("div","dp-field");
+    d.innerHTML=`<label>${label}</label>`;
+    const i=el("input","inp");i.placeholder=placeholder;i.value=val||"";i.id="dp_"+key;i.style.width="100%";
+    d.appendChild(i);content.appendChild(d);
+  }
+
+  const s1=el("div","dp-sect");s1.textContent="Verzió";content.appendChild(s1);
+  dpField("Codename","codename","pl. Phoenix",rel.codename||"");
+  dpField("Verzió","version","pl. 0.2.0",rel.version||"");
+
+  // Channel select
+  const chRow=el("div","dp-field");
+  chRow.innerHTML=`<label>Channel</label>`;
+  const chSel=el("select","inp");chSel.style.width="100%";chSel.id="dp_channel";
+  ["release","beta","dev"].forEach(c=>{const o=el("option");o.value=c;o.textContent=c;if((rel.channel||"release")===c)o.selected=true;chSel.appendChild(o);});
+  chRow.appendChild(chSel);content.appendChild(chRow);
+
+  const s2=el("div","dp-sect");s2.textContent="Letöltési URL-ek";content.appendChild(s2);
+  dpField("Installer URL (Windows EXE setup)","installer_url","https://github.com/.../Xdeck-EFB-Setup-...exe",rel.installer_url||"");
+  dpField("APK URL (Android)","apk_url","https://github.com/.../app-release.apk",rel.apk_url||"");
+
+  const s3=el("div","dp-sect");s3.textContent="Közlemény";content.appendChild(s3);
+  dpField("Changelog (opcionális)","changelog","Újdonságok...",rel.changelog||"");
+
+  const msgDiv=el("div");msgDiv.style.cssText="font-size:10px;margin-top:8px;min-height:18px";content.appendChild(msgDiv);
+
+  const pubBtn=el("button","btn btn-cy");pubBtn.style.cssText="width:100%;margin-top:12px;font-size:12px;padding:9px";pubBtn.textContent="🚀 Publikálás";
+  pubBtn.addEventListener("click",async()=>{
+    const get=id=>document.getElementById("dp_"+id)?.value?.trim()||"";
+    const data={
+      codename:get("codename"),version:get("version"),channel:document.getElementById("dp_channel")?.value||"release",
+      installer_url:get("installer_url"),apk_url:get("apk_url"),changelog:get("changelog"),
+      updated_at:Date.now(),updated_by:S.user?.email||""
+    };
+    if(!data.version||!data.codename){msgDiv.style.color="var(--rd)";msgDiv.textContent="⚠ Codename és verzió kötelező.";return;}
+    try{
+      await db.ref("releases/latest").set(data);
+      msgDiv.style.color="var(--gn)";msgDiv.textContent=`✓ Publikálva: ${data.codename} v${data.version}`;
+    }catch(e){msgDiv.style.color="var(--rd)";msgDiv.textContent="Hiba: "+e.message;}
+  });
+  content.appendChild(pubBtn);
+}
+
 // ── SETTINGS ──────────────────────────────────────────────────────
 function renderSettings(m){
   const {cfg}=S;
@@ -1367,22 +1629,36 @@ auth.onAuthStateChanged(async user=>{
     await loadCfg();
     const ver=await api("/api/version");
     if(ver&&!ver.error){S.cfg.codename=ver.codename;S.cfg.version=ver.version;S.cfg.channel=ver.channel;}
+
+    // Developer rang ellenőrzés
+    const emailKey=(user.email||"").replace(/\./g,",");
+    try{
+      const devSnap=await db.ref(`developers/${emailKey}`).once("value");
+      S.isDev=devSnap.val()===true;
+    }catch{S.isDev=false;}
+
     connectRTDB();
     renderSidebar();renderTab();renderBar();
     checkBridgeStatus();
     _bridgePollInterval = setInterval(checkBridgeStatus, 3000);
     if(S.cfg.autoLoadOfp!==false&&S.cfg.sbUser)loadOFP(S.cfg.sbUser);
+
+    // Update ellenőrzés Firebase RTDB-ből
     setTimeout(async()=>{
-      const u=await api("/api/update");
-      if(u&&u.update){
-        const b=el("div");b.style.cssText="position:fixed;top:0;left:0;right:0;padding:7px 18px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,180,84,.94);color:#06070c;font-size:11px;font-weight:700;z-index:50;animation:fadeIn var(--mid) var(--ease)";
-        b.innerHTML=`🆕 Xdeck EFB ${u.codename||""} elérhető`;
-        const btns=el("div","flex gap6");
-        if(u.url){const lb=el("button");lb.style.cssText="background:rgba(0,0,0,.15);border:none;border-radius:5px;padding:2px 10px;cursor:pointer;font-size:10px;color:#06070c;font-weight:700";lb.textContent="Letöltés";lb.addEventListener("click",()=>openUrl(u.url));btns.appendChild(lb);}
-        const cb=el("button");cb.style.cssText="background:rgba(0,0,0,.12);border:none;border-radius:5px;padding:2px 8px;cursor:pointer;font-size:10px;color:#06070c";cb.textContent="✕";cb.addEventListener("click",()=>b.remove());btns.appendChild(cb);b.appendChild(btns);document.body.appendChild(b);
-      }
+      try{
+        const snap=await db.ref("releases/latest").once("value");
+        const rel=snap.val();
+        if(rel&&rel.version&&rel.version!==S.cfg.version){
+          const b=el("div");b.style.cssText="position:fixed;top:0;left:0;right:0;padding:7px 18px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,180,84,.94);color:#06070c;font-size:11px;font-weight:700;z-index:50;animation:fadeIn var(--mid) var(--ease)";
+          b.innerHTML=`🆕 Xdeck EFB ${rel.codename||rel.version} elérhető`;
+          const btns=el("div","flex gap6");
+          if(rel.installer_url){const lb=el("button");lb.style.cssText="background:rgba(0,0,0,.15);border:none;border-radius:5px;padding:2px 10px;cursor:pointer;font-size:10px;color:#06070c;font-weight:700";lb.textContent="Letöltés";lb.addEventListener("click",()=>openUrl(rel.installer_url));btns.appendChild(lb);}
+          const cb=el("button");cb.style.cssText="background:rgba(0,0,0,.12);border:none;border-radius:5px;padding:2px 8px;cursor:pointer;font-size:10px;color:#06070c";cb.textContent="✕";cb.addEventListener("click",()=>b.remove());btns.appendChild(cb);b.appendChild(btns);document.body.appendChild(b);
+        }
+      }catch{}
     },5000);
   }else{
+    S.isDev=false;
     $("lo").style.display="flex";
   }
 });

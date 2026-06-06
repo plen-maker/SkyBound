@@ -1,9 +1,13 @@
 name: Xdeck EFB — Build
 
 on:
-  push:
-    branches: [main]
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (pl. Orion)'
+        required: true
 
 permissions:
   contents: write
@@ -19,8 +23,17 @@ jobs:
           python-version: "3.11"
       - name: Install deps
         run: pip install pywebview flask flask-cors requests pyinstaller pywin32 pythonnet pillow
+      - name: Convert APK icon to ICO
+        shell: pwsh
+        run: |
+          python -c "
+          from PIL import Image
+          img = Image.open('mobile/assets/icon.png').convert('RGBA')
+          img.save('app_icon.ico', format='ICO', sizes=[(256,256),(128,128),(64,64),(32,32),(16,16)])
+          print('Icon converted')
+          "
       - name: Build EXE
-        run: pyinstaller --onefile --windowed --name "Xdeck-EFB" --add-data "desktop/ui;ui" --add-data "desktop/version.json;." --add-data "desktop/flights;flights" --hidden-import flask --hidden-import flask_cors --hidden-import webview --hidden-import webview.platforms.winforms --hidden-import clr desktop/main.py
+        run: pyinstaller --onefile --windowed --icon=app_icon.ico --name "Xdeck-EFB" --add-data "desktop/ui;ui" --add-data "desktop/version.json;." --add-data "desktop/flights;flights" --hidden-import flask --hidden-import flask_cors --hidden-import webview --hidden-import webview.platforms.winforms --hidden-import clr desktop/main.py
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -68,12 +81,8 @@ jobs:
           d2.rounded_rectangle([2,2,53,53],radius=12,fill=(14,16,28),outline=(77,240,255),width=2)
           d2.text((10,8),'X',font=fb,fill=(77,240,255))
           img2.save('installer_assets/installer_icon.bmp')
-          ico=Image.new('RGBA',(256,256),(8,9,14,255))
-          d3=ImageDraw.Draw(ico)
-          d3.rounded_rectangle([16,16,240,240],radius=50,fill=(14,16,24,255))
-          try: fico=ImageFont.truetype('C:/Windows/Fonts/arialbd.ttf',170)
-          except: fico=ImageFont.load_default()
-          d3.text((28,14),'X',font=fico,fill=(77,240,255,255))
+          # Use mobile app icon for installer
+          ico=Image.open('mobile/assets/icon.png').convert('RGBA')
           ico.save('installer_assets/icon.ico',format='ICO',sizes=[(256,256),(128,128),(64,64),(32,32),(16,16)])
           print('Assets ok')
           "
@@ -87,10 +96,8 @@ jobs:
       - name: Upload installer to release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: "Xdeck EFB — Latest"
+          tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag_name }}
           files: installer_out/*.exe
-          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -124,9 +131,7 @@ jobs:
       - name: Upload APK to release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: "Xdeck EFB — Latest"
+          tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag_name }}
           files: mobile/android/app/build/outputs/apk/release/Xdeck-EFB.apk
-          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
