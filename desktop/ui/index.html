@@ -946,24 +946,16 @@ function renderAlerts(m){
 
 // ── CTRL ──────────────────────────────────────────────────────────
 function renderCtrl(m){
-  const sl=el("div","sl anim");sl.textContent="Controller Axis Mapping";m.appendChild(sl);
-  const gps=Array.from(navigator.getGamepads?.()??[]).filter(Boolean);
-  if(!gps.length){const w=el("div","warn anim");w.textContent="Nem található gamepad / HOTAS.";m.appendChild(w);return;}
-  const LABELS=["Roll","Pitch","Throttle L","Throttle R","Rudder","Tiller","Flaps","Brakes"];
-  gps.forEach(gp=>{
-    const card=el("div","card anim");
-    const t=el("div");t.style.cssText="font-weight:600;font-size:12px;margin-bottom:9px";t.textContent=gp.id.slice(0,50);card.appendChild(t);
-    Array.from(gp.axes).forEach((v,i)=>{
-      const row=el("div","drow flex aic gap8");
-      const lbl=el("span");lbl.style.cssText="font-size:9px;color:var(--dim);width:22px;font-variant-numeric:tabular-nums";lbl.textContent="A"+i;
-      const bar=el("div");bar.style.cssText="width:72px;height:3px;background:var(--p2);border-radius:99px;overflow:hidden";
-      const fill=el("div");fill.style.cssText=`width:${Math.round((v+1)/2*100)}%;height:100%;background:var(--cy);border-radius:99px;transition:width .1s`;bar.appendChild(fill);
-      const val=el("span");val.style.cssText="font-size:9px;color:var(--cy);width:32px;font-variant-numeric:tabular-nums";val.textContent=v.toFixed(2);
-      const sel=el("select","inp f1");sel.style.fontSize="10px";sel.innerHTML="<option>— nincs —</option>"+LABELS.map(l=>"<option>"+l+"</option>").join("");
-      row.appendChild(lbl);row.appendChild(bar);row.appendChild(val);row.appendChild(sel);card.appendChild(row);
-    });
-    m.appendChild(card);
-  });
+  m.style.display="flex";m.style.flexDirection="column";m.style.alignItems="center";m.style.justifyContent="center";m.style.minHeight="60vh";
+  const wrap=el("div");wrap.style.cssText="text-align:center;max-width:340px";
+  const icon=el("div");icon.style.cssText="width:64px;height:64px;border-radius:16px;background:var(--p2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;margin:0 auto 20px";
+  icon.innerHTML="<svg viewBox='0 0 24 24' width='28' height='28' stroke='var(--cy)' fill='none' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='6' width='20' height='12' rx='2'/><path d='M12 12h.01'/><path d='M17 12h.01'/><path d='M7 12h.01'/></svg>";
+  const title=el("div");title.style.cssText="font-size:22px;font-weight:800;color:var(--tx);margin-bottom:8px;letter-spacing:.3px";title.textContent="Coming Soon";
+  const sub=el("div");sub.style.cssText="font-size:13px;color:var(--dim);line-height:1.7;margin-bottom:20px";
+  sub.innerHTML="A vezérlő integrációhoz egy <strong style='color:var(--tx)'>Flare Hardware</strong> bővítmény szükséges.<br>Hamarosan elérhető.";
+  const badge=el("div");badge.style.cssText="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:99px;background:rgba(94,200,255,.08);border:1px solid rgba(94,200,255,.2);color:var(--cy);font-size:11px;font-weight:600";
+  badge.textContent="🎮 Flare Hardware — Q3 2026";
+  wrap.appendChild(icon);wrap.appendChild(title);wrap.appendChild(sub);wrap.appendChild(badge);m.appendChild(wrap);
 }
 
 
@@ -1107,7 +1099,7 @@ function renderMetar(m) {
     const grid=el("div","g2");grid.style.gap="6px";grid.style.marginBottom="8px";
     const stats=[
       ["Látás", p?.vis!=null?(p.vis>=9999?"10+ km":p.vis+"m"):null, "var(--tx)"],
-      ["QNH", p?.qnh?p.qnh+" hPa"+(p.qnhInHg?" / "+p.qnhInHg+""":""):null, "var(--cy)"],
+      ["QNH", p?.qnh ? (p.qnh+" hPa"+(p.qnhInHg ? " / "+p.qnhInHg+'"' : "")) : null, "var(--cy)"],
       ["Hőmérséklet", p?.temp!=null?p.temp+"°C":null, p?.temp<0?"var(--cy)":"var(--am)"],
       ["Harmatpont", p?.dew!=null?p.dew+"°C":null, "var(--dim)"],
     ];
