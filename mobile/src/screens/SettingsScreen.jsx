@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Switch, StyleSheet, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { signOut, getIdTokenResult } from 'firebase/auth';
-import { ref, push } from 'firebase/database';
+import { signOut } from 'firebase/auth';
+import { ref, push, get } from 'firebase/database';
 import { auth, db } from '../firebase';
 import { Card } from '../components/Card';
 import { THEME as C } from '../theme';
@@ -29,11 +29,12 @@ export default function SettingsScreen() {
         if (m.qnhUnit) setQnhUnit(m.qnhUnit);
       });
 
-    // Check developer role from Firebase custom claims
+    // Check developer role from RTDB
     const user = auth.currentUser;
     if (user) {
-      getIdTokenResult(user, true).then(result => {
-        setIsDev(result.claims.role === 'developer');
+      const email = user.email?.replace(/\./g, ','); // Firebase key can't have dots
+      get(ref(db, `developers/${email}`)).then(snap => {
+        setIsDev(snap.exists() && snap.val() === true);
       }).catch(() => {});
     }
   }, []);
@@ -49,7 +50,7 @@ export default function SettingsScreen() {
         body: 'Push notification működik! 🎉',
         ts: Date.now(),
       });
-      Alert.alert('✅ Teszt elküldve', 'A push értesítés el lett küldve.');
+      Alert.alert('✅ Teszt elküldve', 'A push értesítés el lett küldve a bridge-nek.');
     } catch(e) {
       Alert.alert('Hiba', e.message);
     }
@@ -86,15 +87,13 @@ export default function SettingsScreen() {
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
       <Text style={s.title}>Settings</Text>
 
-      {/* Session */}
-      {srow('Session kód', 'Firebase sync — egyedi azonosítód',
+      {srow('Session kód', 'Egyedi azonosítód — ne add meg másnak',
         <TextInput style={s.input} value={session}
           onChangeText={v => { setSession(v); save('sessionCode', v); }}
           placeholder="pl. johndoe-host" placeholderTextColor={C.dim}
           autoCapitalize="none" />
       )}
 
-      {/* SimBrief */}
       {srow('SimBrief usernév', 'OFP betöltéshez',
         <TextInput style={s.input} value={sbUser}
           onChangeText={v => { setSbUser(v); save('sbUser', v); }}
@@ -102,46 +101,39 @@ export default function SettingsScreen() {
           autoCapitalize="none" />
       )}
 
-      {/* Speed unit */}
-      {srow('Sebesség egység', '',
+      {srow('Sebesség', '',
         pillRow([['kt','kt'],['kmh','km/h']], speedUnit, v => { setSpeedUnit(v); save('speedUnit', v); })
       )}
 
-      {/* Alt unit */}
-      {srow('Magasság egység', '',
+      {srow('Magasság', '',
         pillRow([['ft','ft'],['m','m']], altUnit, v => { setAltUnit(v); save('altUnit', v); })
       )}
 
-      {/* QNH unit */}
-      {srow('QNH egység', '',
+      {srow('QNH', '',
         pillRow([['hPa','hPa'],['inHg','inHg']], qnhUnit, v => { setQnhUnit(v); save('qnhUnit', v); })
       )}
 
-      {/* Notifications */}
-      {srow('Push értesítések', 'Bridge trigger hangjelzés',
+      {srow('Push értesítések', '',
         <Switch value={notifications}
           onValueChange={v => { setNotifications(v); save('notifications', v); }}
           trackColor={{ false: C.line, true: C.cy }}
           thumbColor={notifications ? C.bg : C.dim} />
       )}
 
-      {/* Push test */}
       <TouchableOpacity style={s.testBtn} onPress={testPush} disabled={pushTesting}>
-        <Text style={s.testBtnTx}>{pushTesting ? '⏳ Küldés...' : '🔔 Push teszt'}</Text>
+        <Text style={s.testBtnTx}>{pushTesting ? '⏳ Küldés...' : '🔔 Push értesítés teszt'}</Text>
       </TouchableOpacity>
 
-      {/* Version */}
       <Card style={s.versionCard}>
         <Text style={s.versionText}>Xdeck EFB — Orion · v0.1.0</Text>
         <Text style={s.versionSub}>Electronic Flight Bag for MSFS 2020/2024</Text>
         {isDev && <Text style={[s.versionSub, { color: C.am, marginTop: 4 }]}>⚙ Developer</Text>}
       </Card>
 
-      {/* Developer options — only for developers */}
       {isDev && (
-        <Card style={[s.devCard]}>
+        <Card style={s.devCard}>
           <Text style={s.devTitle}>⚙ Developer Options</Text>
-          <Text style={s.devNote}>Csak fejlesztői fiókok látják ezt.</Text>
+          <Text style={s.devNote}>Firebase RTDB: developers/{auth.currentUser?.email?.replace(/\./g,',')} = true</Text>
         </Card>
       )}
 
@@ -174,9 +166,9 @@ const s = StyleSheet.create({
   versionCard: { alignItems:'center', borderColor:'rgba(94,200,255,0.15)' },
   versionText: { fontSize:13, fontWeight:'700', color:C.cy },
   versionSub: { fontSize:10, color:C.dim, marginTop:4 },
-  devCard: { borderColor:'rgba(255,180,84,0.2)', backgroundColor:'rgba(255,180,84,0.03)' },
-  devTitle: { fontSize:13, fontWeight:'700', color:C.am, marginBottom:6 },
-  devNote: { fontSize:11, color:C.dim },
+  devCard: { borderColor:'rgba(255,180,84,0.2)', backgroundColor:'rgba(255,180,84,0.03)', marginBottom:10 },
+  devTitle: { fontSize:13, fontWeight:'700', color:C.am, marginBottom:4 },
+  devNote: { fontSize:10, color:C.dim },
   logoutBtn: { backgroundColor:'rgba(240,96,128,0.1)', borderWidth:1,
     borderColor:'rgba(240,96,128,0.3)', borderRadius:12, padding:14,
     alignItems:'center', marginTop:8 },
