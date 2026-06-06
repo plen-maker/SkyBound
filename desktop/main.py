@@ -136,6 +136,14 @@ def get_bridge_dir():
         return os.path.join(os.path.dirname(sys.executable), "bridge")
     return os.path.join(os.path.dirname(BASE), "bridge")
 
+def get_bridge_env_dir():
+    """Writable dir for .env — AppData when frozen, bridge/ in dev."""
+    if getattr(sys, "frozen", False):
+        d = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "Xdeck EFB")
+        os.makedirs(d, exist_ok=True)
+        return d
+    return os.path.join(os.path.dirname(BASE), "bridge")
+
 _bridge_proc = None
 
 @app.route("/api/bridge/status")
@@ -148,7 +156,7 @@ def bridge_status():
 
 @app.route("/api/bridge/env", methods=["GET", "POST"])
 def bridge_env():
-    env_path = os.path.join(get_bridge_dir(), ".env")
+    env_path = os.path.join(get_bridge_env_dir(), ".env")
     if request.method == "POST":
         data = request.json or {}
         try:
@@ -175,13 +183,12 @@ def bridge_start():
     global _bridge_proc
     if _bridge_proc and _bridge_proc.poll() is None:
         return jsonify({"ok": True, "already": True})
-    bridge_dir = get_bridge_dir()
-    env_file = os.path.join(bridge_dir, ".env")
-    if not os.path.exists(bridge_dir):
-        return jsonify({"error": "Bridge mappa nem található: " + bridge_dir})
+
+    env_dir  = get_bridge_env_dir()
+    env_file = os.path.join(env_dir, ".env")
     if not os.path.exists(env_file):
-        return jsonify({"error": ".env fájl hiányzik a bridge mappából"})
-    env = load_json(env_file.replace(".env", ".env"), {})
+        return jsonify({"error": ".env fájl hiányzik — töltsd ki a Bridge beállításokat"})
+
     sim_mode = "--simconnect"
     try:
         with open(env_file) as f:
@@ -195,12 +202,25 @@ def bridge_start():
                         sim_mode = ""
     except Exception:
         pass
+
     try:
-        node = "node.exe" if os.name == "nt" else "node"
-        cmd = [node, "src/index.js"] + ([sim_mode] if sim_mode else [])
+        if getattr(sys, "frozen", False):
+            bridge_exe = os.path.join(os.path.dirname(sys.executable), "bridge", "bridge.exe")
+            if not os.path.exists(bridge_exe):
+                return jsonify({"error": "bridge.exe nem található: " + bridge_exe})
+            cmd = [bridge_exe] + ([sim_mode] if sim_mode else [])
+            cwd = env_dir
+        else:
+            bridge_dir = get_bridge_dir()
+            if not os.path.exists(bridge_dir):
+                return jsonify({"error": "Bridge mappa nem található: " + bridge_dir})
+            node = "node.exe" if os.name == "nt" else "node"
+            cmd = [node, "src/index.js"] + ([sim_mode] if sim_mode else [])
+            cwd = bridge_dir
+
         _bridge_proc = subprocess.Popen(
             cmd,
-            cwd=bridge_dir,
+            cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,

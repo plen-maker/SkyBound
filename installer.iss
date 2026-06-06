@@ -36,8 +36,12 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create Desktop shortcut"; GroupDescription: "Options:"; Flags: unchecked
 Name: "autostart";   Description: "Launch on Windows startup"; GroupDescription: "Options:"; Flags: unchecked
 
+[Dirs]
+Name: "{app}\bridge"
+
 [Files]
 Source: "dist\Xdeck-EFB.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\bridge.exe";     DestDir: "{app}\bridge"; Flags: ignoreversion
 Source: "installer_assets\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
