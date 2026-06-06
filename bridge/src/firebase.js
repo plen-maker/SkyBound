@@ -1,5 +1,3 @@
-/* Firebase Admin — RTDB (Realtime Database).
-   Uses RTDB instead of Firestore: no per-write billing, ideal for 1Hz telemetry. */
 import admin from "firebase-admin";
 import fs from "node:fs";
 
@@ -13,11 +11,16 @@ export function initFirebase(serviceAccountPath) {
   });
   db = admin.database();
   messaging = admin.messaging();
-  console.log("[fb] Firebase Admin initialised (RTDB)");
+  console.log("[fb] Firebase Admin initialised");
 }
 
 export function writeLive(sessionCode, telemetry, derived) {
   return db.ref(`sessions/${sessionCode}/live`).set({ ...telemetry, ...derived, ts: Date.now() });
+}
+
+// Clear live data when bridge stops
+export function clearLive(sessionCode) {
+  return db.ref(`sessions/${sessionCode}/live`).remove();
 }
 
 export function watchTriggers(sessionCode, cb) {

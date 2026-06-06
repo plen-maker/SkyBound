@@ -3,17 +3,15 @@ import { startSim } from "./sim.js";
 import { startFsuipc } from "./fsuipc_sim.js";
 import { createEngine } from "./triggers.js";
 import { fetchOFP } from "../../shared/simbrief.js";
-import { initFirebase, writeLive, watchTriggers, pushToDevices } from "./firebase.js";
+import { initFirebase, writeLive, watchTriggers, pushToDevices, clearLive } from "./firebase.js";
 import { todDistanceNm } from "./geo.js";
 
 const SESSION  = process.env.SKYBOUND_SESSION;
 const SVC      = process.env.FIREBASE_SERVICE_ACCOUNT;
 const SB_USER  = process.env.SIMBRIEF_USERNAME;
-
-// Mode from command line args or env
-const args = process.argv.slice(2);
-let SIM_MODE = process.env.SIM_MODE || "auto";
-if (args.includes("--fsuipc")) SIM_MODE = "fsuipc7";
+const args     = process.argv.slice(2);
+let SIM_MODE   = process.env.SIM_MODE || "auto";
+if (args.includes("--fsuipc"))     SIM_MODE = "fsuipc7";
 if (args.includes("--simconnect")) SIM_MODE = "simconnect";
 
 if (!SESSION || !SVC) {
@@ -24,16 +22,30 @@ if (!SESSION || !SVC) {
 let ofp = null, triggers = [];
 const engine = createEngine();
 
+// Clear live data on exit
+async function onExit() {
+  console.log("[bridge] kilépés — live adatok törlése...");
+  try { await clearLive(SESSION); } catch {}
+  process.exit(0);
+}
+process.on("SIGINT",  onExit);
+process.on("SIGTERM", onExit);
+process.on("SIGHUP",  onExit);
+
 async function loadOFP() {
   try {
     ofp = await fetchOFP({ username: SB_USER });
-    console.log(`[ofp] ${ofp.dep}→${ofp.arr}  pax ${ofp.pax}  payload ${ofp.payload} ${ofp.units}`);
+    console.log(`[ofp] ${ofp.dep}→${ofp.arr}`);
   } catch(e) { console.warn("[ofp] load failed:", e.message); }
 }
 
 let lastWrite = 0;
+let lastDataTs = 0;
+const DATA_TIMEOUT_MS = 15000; // 15s no data → clear live
+
 function handleTelemetry(telemetry) {
   const now = Date.now();
+  lastDataTs = now;
   if (now - lastWrite < 900) return;
   lastWrite = now;
   const derived = {
@@ -45,6 +57,15 @@ function handleTelemetry(telemetry) {
   for (const ev of events)
     pushToDevices(SESSION, { title: ev.title, body: ev.body }).catch(() => {});
 }
+
+// Watchdog: clear live data if no telemetry for 15s
+setInterval(async () => {
+  if (lastDataTs > 0 && Date.now() - lastDataTs > DATA_TIMEOUT_MS) {
+    console.warn("[bridge] Nincs adat 15s óta — live adatok törlése");
+    lastDataTs = 0;
+    try { await clearLive(SESSION); } catch {}
+  }
+}, 5000);
 
 async function main() {
   initFirebase(SVC);
@@ -59,18 +80,15 @@ async function main() {
     console.log("[bridge] Mode: SimConnect");
     await startSim(handleTelemetry);
   } else {
-    console.log("[bridge] Mode: auto — trying FSUIPC7 first...");
+    console.log("[bridge] Mode: auto");
     try {
       await startFsuipc(handleTelemetry);
-      console.log("[bridge] Using FSUIPC7 ✓");
     } catch(e) {
-      console.warn("[bridge] FSUIPC7 not available:", e.message);
-      console.log("[bridge] Falling back to SimConnect...");
+      console.warn("[bridge] FSUIPC7 nem elérhető, SimConnect...");
       await startSim(handleTelemetry);
     }
   }
-
-  console.log("[bridge] fut. Várja az MSFS-t...");
+  console.log("[bridge] fut...");
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
