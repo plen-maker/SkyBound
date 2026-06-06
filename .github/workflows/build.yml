@@ -63,7 +63,9 @@ jobs:
         shell: pwsh
         run: |
           npm install --omit=optional
-          npx --yes @yao-pkg/pkg . --target node18-win-x64 --no-bytecode --public --output ../dist/bridge.exe
+          npx --yes @vercel/ncc build src/index.js -o ncc_out --quiet
+          Set-Content -Path ncc_out/package.json -Value '{"name":"bridge","version":"1.0.0","bin":"index.js","pkg":{"assets":["*.node"]}}'
+          npx --yes @yao-pkg/pkg ncc_out --target node18-win-x64 --output ../dist/bridge.exe
       - name: Generate assets
         shell: pwsh
         run: |
