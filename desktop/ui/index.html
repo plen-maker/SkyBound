@@ -354,17 +354,17 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--tx);font-
     <div style="font-size:11px;color:var(--dim);margin-top:4px">Electronic Flight Bag · MSFS 2020/2024</div>
   </div>
   <div class="flex gap6" id="lmBtns">
-    <button class="pill on" id="lmLogin">Belépés</button>
-    <button class="pill" id="lmReg">Regisztráció</button>
+    <button class="pill on" id="lmLogin" onclick="_lm='login';this.classList.add('on');document.getElementById('lmReg').classList.remove('on');document.getElementById('lbtn').textContent='Belépés'">Belépés</button>
+    <button class="pill" id="lmReg" onclick="_lm='register';this.classList.add('on');document.getElementById('lmLogin').classList.remove('on');document.getElementById('lbtn').textContent='Fiók létrehozása'">Regisztráció</button>
   </div>
   <div style="width:300px;display:flex;flex-direction:column;gap:9px">
     <input class="inp" id="lemail" type="email" placeholder="Email" style="width:100%"/>
     <div style="position:relative">
       <input class="inp" id="lpw" type="password" placeholder="Jelszó" style="width:100%;padding-right:36px"/>
-      <button id="eyeBtn" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--dim);font-size:14px">👁</button>
+      <button id="eyeBtn" onclick="var p=document.getElementById('lpw');p.type=p.type==='password'?'text':'password'" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--dim);font-size:14px">👁</button>
     </div>
     <div id="lerr" style="color:var(--rd);font-size:11px;display:none"></div>
-    <button class="btn btn-cy" id="lbtn" style="width:100%;justify-content:center;font-size:13px;padding:10px">Belépés</button>
+    <button class="btn btn-cy" id="lbtn" onclick="doLogin()" style="width:100%;justify-content:center;font-size:13px;padding:10px">Belépés</button>
   </div>
   <div style="font-size:10px;color:var(--dim);text-align:center;max-width:240px;line-height:1.7">
     Ez a fiók köti össze a desktopot, a telefont és a sim bridge-et.
