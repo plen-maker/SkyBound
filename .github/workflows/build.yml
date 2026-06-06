@@ -24,7 +24,7 @@ jobs:
         run: pip install pywebview flask flask-cors requests pyinstaller pywin32 pythonnet pillow
 
       - name: Build EXE
-        run: pyinstaller --onefile --windowed --name "Xdeck EFB" --add-data "desktop/ui;ui" --add-data "desktop/version.json;." --add-data "desktop/flights;flights" --hidden-import flask --hidden-import flask_cors --hidden-import webview --hidden-import webview.platforms.winforms --hidden-import clr desktop/main.py
+        run: pyinstaller --onefile --windowed --name "Xdeck-EFB" --add-data "desktop/ui;ui" --add-data "desktop/version.json;." --add-data "desktop/flights;flights" --hidden-import flask --hidden-import flask_cors --hidden-import webview --hidden-import webview.platforms.winforms --hidden-import clr desktop/main.py
 
       - name: Upload EXE to latest release
         uses: softprops/action-gh-release@v2
