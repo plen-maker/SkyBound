@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Xdeck EFB — Electronic Flight Bag for MSFS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#05060c;--p1:#0a0c18;--p2:#0f1224;--line:#1a2040;
+  --cy:#4df0ff;--gn:#3dffc8;--am:#ffb547;--rd:#ff4d6d;--pu:#b47cff;
+  --tx:#e8eeff;--dim:#4a5880;--dim2:#2a3450;
+  --font:'Syne',sans-serif;--body:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--tx);font-family:var(--body);overflow-x:hidden;min-height:100vh}
+
+/* ── Noise overlay ── */
+body::before{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+  opacity:.4;
+}
+
+/* ── Grid bg ── */
+.grid-bg{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(77,240,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(77,240,255,.025) 1px, transparent 1px);
+  background-size:60px 60px;
+  mask-image:radial-gradient(ellipse 80% 80% at 50% 0%, black 0%, transparent 70%);
+}
+
+/* ── Nav ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 48px;height:64px;
+  background:rgba(5,6,12,.8);backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(77,240,255,.06);
+}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.nav-logo-icon{
+  width:32px;height:32px;border-radius:8px;
+  background:linear-gradient(135deg,var(--cy),var(--pu));
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font);font-weight:800;font-size:16px;color:#05060c;
+}
+.nav-logo-text{font-family:var(--font);font-weight:800;font-size:15px;letter-spacing:.5px;color:var(--tx)}
+.nav-links{display:flex;align-items:center;gap:32px}
+.nav-links a{font-size:13px;color:var(--dim);text-decoration:none;transition:color .2s;font-weight:500}
+.nav-links a:hover{color:var(--tx)}
+.nav-cta{
+  background:var(--cy);color:#05060c;border:none;border-radius:8px;
+  padding:8px 20px;font-size:13px;font-weight:700;font-family:var(--font);
+  cursor:pointer;text-decoration:none;transition:opacity .2s,transform .15s;
+}
+.nav-cta:hover{opacity:.9;transform:translateY(-1px)}
+
+/* ── Hero ── */
+.hero{
+  position:relative;min-height:100vh;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;
+  padding:120px 24px 80px;z-index:1;
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:6px 16px;border-radius:99px;
+  background:rgba(77,240,255,.06);border:1px solid rgba(77,240,255,.15);
+  font-size:11px;font-weight:600;color:var(--cy);letter-spacing:1px;
+  text-transform:uppercase;margin-bottom:28px;
+  animation:fadeUp .8s ease both;
+}
+.hero-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--cy);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.3;transform:scale(.7)}50%{opacity:1;transform:scale(1.2)}}
+
+.hero-title{
+  font-family:var(--font);font-weight:800;
+  font-size:clamp(52px,8vw,96px);line-height:.95;letter-spacing:-2px;
+  margin-bottom:24px;
+  animation:fadeUp .8s .1s ease both;
+}
+.hero-title span{
+  background:linear-gradient(135deg,var(--cy) 0%,var(--pu) 60%,var(--am) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.hero-sub{
+  font-size:clamp(16px,2vw,20px);color:var(--dim);max-width:560px;line-height:1.65;
+  margin-bottom:48px;font-weight:300;
+  animation:fadeUp .8s .2s ease both;
+}
+.hero-btns{
+  display:flex;flex-wrap:wrap;gap:12px;justify-content:center;
+  animation:fadeUp .8s .3s ease both;
+}
+.btn-primary{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--cy);color:#05060c;border:none;border-radius:10px;
+  padding:14px 28px;font-size:15px;font-weight:700;font-family:var(--font);
+  cursor:pointer;text-decoration:none;
+  transition:opacity .2s,transform .15s,box-shadow .2s;
+  box-shadow:0 0 30px rgba(77,240,255,.2);
+}
+.btn-primary:hover{opacity:.9;transform:translateY(-2px);box-shadow:0 8px 40px rgba(77,240,255,.3)}
+.btn-secondary{
+  display:inline-flex;align-items:center;gap:8px;
+  background:transparent;color:var(--tx);border:1px solid var(--line);border-radius:10px;
+  padding:14px 28px;font-size:15px;font-weight:600;font-family:var(--font);
+  cursor:pointer;text-decoration:none;
+  transition:border-color .2s,transform .15s,background .2s;
+}
+.btn-secondary:hover{border-color:var(--cy);background:rgba(77,240,255,.04);transform:translateY(-2px)}
+.btn-icon{font-size:16px}
+
+/* ── App mockup ── */
+.hero-mockup{
+  margin-top:72px;position:relative;
+  animation:fadeUp .8s .4s ease both;
+}
+.mockup-glow{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:600px;height:300px;border-radius:50%;
+  background:radial-gradient(ellipse,rgba(77,240,255,.12) 0%,transparent 70%);
+  pointer-events:none;
+}
+.mockup-frame{
+  width:min(760px,90vw);background:var(--p1);border:1px solid var(--line);
+  border-radius:16px;overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,.6);
+  position:relative;z-index:1;
+}
+.mockup-bar{
+  height:42px;background:rgba(10,12,24,.9);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;padding:0 16px;gap:8px;
+}
+.mockup-dot{width:10px;height:10px;border-radius:50%}
+.mockup-title{font-size:11px;color:var(--dim);margin-left:auto;margin-right:auto;font-family:var(--mono);letter-spacing:.5px}
+.mockup-body{padding:20px;display:grid;grid-template-columns:56px 1fr;gap:0;min-height:320px}
+.mockup-sidebar{border-right:1px solid var(--line);padding:8px 4px;display:flex;flex-direction:column;gap:2px}
+.mockup-nav{width:48px;height:44px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:default}
+.mockup-nav.on{background:var(--p2);color:var(--cy)}
+.mockup-nav svg{width:14px;height:14px;opacity:.5}
+.mockup-nav.on svg{opacity:1}
+.mockup-nav-label{font-size:7px;color:var(--dim);font-family:var(--mono)}
+.mockup-nav.on .mockup-nav-label{color:var(--cy)}
+.mockup-main{padding:16px;display:flex;flex-direction:column;gap:10px}
+.mockup-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.mockup-stat{background:var(--p2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.mockup-stat-l{font-size:7px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;font-family:var(--mono)}
+.mockup-stat-v{font-size:16px;font-weight:700;color:var(--tx);font-family:var(--mono)}
+.mockup-stat-v.live{color:var(--cy)}
+.mockup-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.mockup-tile{background:rgba(15,18,36,.8);border:1px solid var(--line);border-radius:8px;padding:8px;cursor:default;transition:border-color .2s}
+.mockup-tile:hover{border-color:rgba(77,240,255,.2)}
+.mockup-tile-dot{width:8px;height:8px;border-radius:50%;margin-bottom:6px}
+.mockup-tile-name{font-size:9px;font-weight:600;color:var(--tx)}
+.mockup-map{background:rgba(8,12,28,.8);border:1px solid var(--line);border-radius:8px;height:70px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.mockup-route{position:absolute;inset:0;opacity:.4}
+
+/* ── Features ── */
+.section{padding:120px 48px;position:relative;z-index:1;max-width:1200px;margin:0 auto}
+.section-label{
+  font-size:11px;font-weight:700;letter-spacing:2px;color:var(--cy);
+  text-transform:uppercase;margin-bottom:16px;font-family:var(--mono);
+}
+.section-title{
+  font-family:var(--font);font-weight:800;font-size:clamp(36px,5vw,56px);
+  line-height:1.05;letter-spacing:-1px;margin-bottom:16px;
+}
+.section-sub{font-size:18px;color:var(--dim);max-width:520px;line-height:1.6;font-weight:300;margin-bottom:64px}
+
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.feat{
+  background:var(--p1);border:1px solid var(--line);border-radius:16px;padding:28px;
+  position:relative;overflow:hidden;transition:border-color .3s,transform .3s;
+  opacity:0;transform:translateY(20px);transition:opacity .5s,transform .5s,border-color .3s;
+}
+.feat.visible{opacity:1;transform:none}
+.feat::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent,var(--cy)),transparent);
+  opacity:0;transition:opacity .3s;
+}
+.feat:hover{border-color:rgba(77,240,255,.15);transform:translateY(-3px)}
+.feat:hover::before{opacity:1}
+.feat-icon{
+  width:44px;height:44px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;margin-bottom:16px;
+  font-size:20px;
+}
+.feat-title{font-family:var(--font);font-weight:700;font-size:18px;margin-bottom:8px}
+.feat-desc{font-size:14px;color:var(--dim);line-height:1.6;font-weight:300}
+
+/* ── Downloads ── */
+.downloads{
+  padding:80px 48px;background:var(--p1);border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);position:relative;z-index:1;
+}
+.downloads-inner{max-width:1200px;margin:0 auto}
+.dl-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:48px}
+.dl-card{
+  background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:28px;
+  display:flex;flex-direction:column;gap:12px;
+  transition:border-color .3s,transform .2s;
+}
+.dl-card:hover{border-color:rgba(77,240,255,.2);transform:translateY(-2px)}
+.dl-platform{font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase;font-family:var(--mono)}
+.dl-name{font-family:var(--font);font-weight:800;font-size:22px}
+.dl-desc{font-size:13px;color:var(--dim);line-height:1.5;flex:1;font-weight:300}
+.dl-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:11px 20px;border-radius:9px;font-size:13px;font-weight:700;
+  font-family:var(--font);cursor:pointer;text-decoration:none;
+  transition:opacity .2s,transform .15s;border:none;
+}
+.dl-btn:hover{opacity:.85;transform:translateY(-1px)}
+.dl-btn-win{background:var(--cy);color:#05060c}
+.dl-btn-apk{background:var(--gn);color:#05060c}
+.dl-btn-installer{background:linear-gradient(135deg,var(--cy),var(--pu));color:#05060c}
+.dl-note{font-size:11px;color:var(--dim);font-family:var(--mono)}
+
+/* ── Stats strip ── */
+.stats-strip{
+  padding:48px;border-bottom:1px solid var(--line);position:relative;z-index:1;
+  background:linear-gradient(180deg,transparent,rgba(77,240,255,.02),transparent);
+}
+.stats-inner{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:0}
+.stat-item{text-align:center;padding:16px;border-right:1px solid var(--line)}
+.stat-item:last-child{border-right:none}
+.stat-num{font-family:var(--font);font-size:42px;font-weight:800;background:linear-gradient(135deg,var(--cy),var(--pu));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat-label{font-size:12px;color:var(--dim);margin-top:4px;font-weight:400}
+
+/* ── Contact ── */
+.contact{padding:80px 48px;position:relative;z-index:1}
+.contact-inner{max-width:640px;margin:0 auto;text-align:center}
+.contact-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:40px}
+.contact-card{
+  background:var(--p1);border:1px solid var(--line);border-radius:14px;padding:24px;
+  text-decoration:none;display:flex;align-items:center;gap:14px;
+  transition:border-color .2s,transform .2s,background .2s;
+}
+.contact-card:hover{border-color:rgba(77,240,255,.2);transform:translateY(-2px);background:var(--p2)}
+.contact-icon{font-size:24px;width:44px;height:44px;border-radius:10px;background:var(--p2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.contact-label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;font-family:var(--mono);margin-bottom:3px}
+.contact-value{font-size:14px;color:var(--tx);font-weight:500}
+
+/* ── Footer ── */
+footer{
+  padding:32px 48px;border-top:1px solid var(--line);position:relative;z-index:1;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.footer-left{font-size:12px;color:var(--dim)}
+.footer-right{font-size:12px;color:var(--dim)}
+
+/* ── Animations ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+
+/* ── Scroll reveal ── */
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .6s ease,transform .6s ease}
+.reveal.visible{opacity:1;transform:none}
+
+/* ── Responsive ── */
+@media(max-width:768px){
+  nav{padding:0 20px}
+  .nav-links{display:none}
+  .section{padding:80px 20px}
+  .features-grid,.dl-grid,.stats-inner{grid-template-columns:1fr}
+  .stat-item{border-right:none;border-bottom:1px solid var(--line)}
+  .contact-cards{grid-template-columns:1fr}
+  .downloads{padding:60px 20px}
+  footer{flex-direction:column;gap:8px;text-align:center;padding:24px 20px}
+}
+
+/* ── Live badge animation ── */
+.live-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 10px;border-radius:99px;font-size:10px;font-weight:700;
+  background:rgba(61,255,200,.08);border:1px solid rgba(61,255,200,.2);
+  color:var(--gn);font-family:var(--mono);letter-spacing:.5px;
+}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--gn);animation:pulse 2s ease-in-out infinite}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<!-- Nav -->
+<nav>
+  <a href="#" class="nav-logo">
+    <div class="nav-logo-icon">X</div>
+    <span class="nav-logo-text">XDECK EFB</span>
+  </a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#download">Download</a>
+    <a href="#contact">Contact</a>
+  </div>
+  <a href="#download" class="nav-cta">Download</a>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-badge">
+    <div class="live-dot"></div>
+    Orion · v0.1.0 — Now Available
+  </div>
+  <h1 class="hero-title">
+    Your cockpit.<br><span>Everywhere.</span>
+  </h1>
+  <p class="hero-sub">
+    Xdeck EFB connects your simulator to your phone and desktop — SimBrief, VATSIM, METAR, live telemetry and push alerts, all in one place.
+  </p>
+  <div class="hero-btns">
+    <a href="#download" class="btn-primary">
+      <span class="btn-icon">⬇</span> Download Free
+    </a>
+    <a href="#features" class="btn-secondary">
+      See features →
+    </a>
+  </div>
+
+  <!-- App mockup -->
+  <div class="hero-mockup">
+    <div class="mockup-glow"></div>
+    <div class="mockup-frame">
+      <div class="mockup-bar">
+        <div class="mockup-dot" style="background:#ff5f57"></div>
+        <div class="mockup-dot" style="background:#febc2e"></div>
+        <div class="mockup-dot" style="background:#28c840"></div>
+        <span class="mockup-title">XDECK EFB · EKCH→LHBP · ddnemet-host</span>
+        <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+      </div>
+      <div class="mockup-body">
+        <div class="mockup-sidebar">
+          <div class="mockup-nav on">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 9 12 2 21 9 21 20 3 20"/></svg>
+            <span class="mockup-nav-label">Home</span>
+          </div>
+          <div class="mockup-nav">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/></svg>
+            <span class="mockup-nav-label">Map</span>
+          </div>
+          <div class="mockup-nav">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span class="mockup-nav-label">OFP</span>
+          </div>
+          <div class="mockup-nav">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/></svg>
+            <span class="mockup-nav-label">Alerts</span>
+          </div>
+        </div>
+        <div class="mockup-main">
+          <div class="mockup-stats">
+            <div class="mockup-stat"><div class="mockup-stat-l">ETE</div><div class="mockup-stat-v live">1:42<sub style="font-size:8px;color:var(--dim)"> h:m</sub></div></div>
+            <div class="mockup-stat"><div class="mockup-stat-l">GS</div><div class="mockup-stat-v live">438<sub style="font-size:8px;color:var(--dim)"> kt</sub></div></div>
+            <div class="mockup-stat"><div class="mockup-stat-l">ALT</div><div class="mockup-stat-v live">35,000<sub style="font-size:8px;color:var(--dim)"> ft</sub></div></div>
+            <div class="mockup-stat"><div class="mockup-stat-l">V/S</div><div class="mockup-stat-v">—</div></div>
+          </div>
+          <div class="mockup-tiles">
+            <div class="mockup-tile"><div class="mockup-tile-dot" style="background:#b47cff"></div><div class="mockup-tile-name">Navigraph</div></div>
+            <div class="mockup-tile"><div class="mockup-tile-dot" style="background:#3dffc8"></div><div class="mockup-tile-name">VATSIM</div></div>
+            <div class="mockup-tile"><div class="mockup-tile-dot" style="background:#ffb547"></div><div class="mockup-tile-name">SimBrief</div></div>
+            <div class="mockup-tile"><div class="mockup-tile-dot" style="background:#1db954"></div><div class="mockup-tile-name">Spotify</div></div>
+          </div>
+          <div class="mockup-map">
+            <svg class="mockup-route" viewBox="0 0 400 70" preserveAspectRatio="none">
+              <polyline points="20,55 80,48 140,35 200,28 260,22 320,18 380,15" fill="none" stroke="#4df0ff" stroke-width="1.5" stroke-dasharray="8,5" opacity="0.5"/>
+              <circle cx="20" cy="55" r="4" fill="#3dffc8"/>
+              <circle cx="380" cy="15" r="4" fill="#ff4d6d"/>
+              <circle cx="220" cy="26" r="5" fill="white" stroke="#4df0ff" stroke-width="1.5"/>
+            </svg>
+            <span style="font-size:9px;color:var(--dim);font-family:var(--mono);z-index:1">EKCH → LHBP</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Stats -->
+<div class="stats-strip">
+  <div class="stats-inner">
+    <div class="stat-item reveal">
+      <div class="stat-num">2</div>
+      <div class="stat-label">Platforms — Windows & Android</div>
+    </div>
+    <div class="stat-item reveal" style="transition-delay:.1s">
+      <div class="stat-num">1Hz</div>
+      <div class="stat-label">Live telemetry update rate</div>
+    </div>
+    <div class="stat-item reveal" style="transition-delay:.2s">
+      <div class="stat-num">20+</div>
+      <div class="stat-label">Configurable settings</div>
+    </div>
+    <div class="stat-item reveal" style="transition-delay:.3s">
+      <div class="stat-num">0€</div>
+      <div class="stat-label">Free, forever</div>
+    </div>
+  </div>
+</div>
+
+<!-- Features -->
+<section class="section" id="features">
+  <div class="section-label">Features</div>
+  <h2 class="section-title reveal">Everything you need<br>in the air.</h2>
+  <p class="section-sub reveal" style="transition-delay:.1s">Built for serious simmers. No bloat, no subscriptions — just the tools you need.</p>
+
+  <div class="features-grid">
+    <div class="feat reveal" style="--accent:var(--cy)">
+      <div class="feat-icon" style="background:rgba(77,240,255,.1)">📄</div>
+      <div class="feat-title">SimBrief OFP</div>
+      <div class="feat-desc">Load your full flight plan instantly. Weights, fuel breakdown, route, navlog — simplified or full realistic SimBrief document format.</div>
+    </div>
+    <div class="feat reveal" style="--accent:var(--gn);transition-delay:.1s">
+      <div class="feat-icon" style="background:rgba(61,255,200,.1)">📡</div>
+      <div class="feat-title">Live Bridge</div>
+      <div class="feat-desc">1Hz real-time telemetry from MSFS via SimConnect or FSUIPC7. GS, altitude, V/S, position — synced to your phone and desktop instantly.</div>
+    </div>
+    <div class="feat reveal" style="--accent:var(--pu);transition-delay:.2s">
+      <div class="feat-icon" style="background:rgba(180,124,255,.1)">🔔</div>
+      <div class="feat-title">Push Alerts</div>
+      <div class="feat-desc">Set waypoint triggers that notify your phone. Top of Descent, fix crossing, landing — stay heads-up without watching the screen.</div>
+    </div>
+    <div class="feat reveal" style="--accent:var(--am);transition-delay:.1s">
+      <div class="feat-icon" style="background:rgba(255,181,71,.1)">🌤</div>
+      <div class="feat-title">METAR & Weather</div>
+      <div class="feat-desc">Live METAR for any ICAO. Wind direction with visual arrow, cloud coverage color-coded by severity, QNH, temperature, dew point.</div>
+    </div>
+    <div class="feat reveal" style="--accent:var(--rd);transition-delay:.2s">
+      <div class="feat-icon" style="background:rgba(255,77,109,.1)">🗺</div>
+      <div class="feat-title">VATSIM ATC</div>
+      <div class="feat-desc">See active controllers on your route. DEL, GND, TWR, APP, CTR — tap any station to read the full ATIS text.</div>
+    </div>
+    <div class="feat reveal" style="--accent:var(--cy);transition-delay:.3s">
+      <div class="feat-icon" style="background:rgba(77,240,255,.1)">🗺</div>
+      <div class="feat-title">Live Map</div>
+      <div class="feat-desc">Satellite or street map with your OFP route overlay. Real-time aircraft position updates as you fly.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Downloads -->
+<div class="downloads" id="download">
+  <div class="downloads-inner">
+    <div class="section-label">Downloads</div>
+    <h2 class="section-title reveal">Get Xdeck EFB</h2>
+    <p class="section-sub reveal" style="transition-delay:.1s;margin-bottom:0">Always free. No account required for the desktop app.</p>
+    <div class="dl-grid">
+      <div class="dl-card reveal">
+        <div class="dl-platform">Windows · Installer</div>
+        <div class="dl-name">Xdeck EFB Setup</div>
+        <div class="dl-desc">The recommended way to install. Includes SimBridge setup, desktop shortcut, and automatic updates.</div>
+        <a href="https://github.com/plen-maker/SkyBound/releases/latest/download/Xdeck-EFB-Setup-Orion.exe" class="dl-btn dl-btn-installer">
+          ⬇ Download Installer
+        </a>
+        <div class="dl-note">Windows 10/11 · 64-bit</div>
+      </div>
+      <div class="dl-card reveal" style="transition-delay:.1s">
+        <div class="dl-platform">Windows · Portable</div>
+        <div class="dl-name">Xdeck EFB.exe</div>
+        <div class="dl-desc">Standalone executable, no installation required. Just download and run. Bridge must be set up separately.</div>
+        <a href="https://github.com/plen-maker/SkyBound/releases/latest/download/Xdeck EFB.exe" class="dl-btn dl-btn-win">
+          ⬇ Download EXE
+        </a>
+        <div class="dl-note">Windows 10/11 · 64-bit · Portable</div>
+      </div>
+      <div class="dl-card reveal" style="transition-delay:.2s">
+        <div class="dl-platform">Android</div>
+        <div class="dl-name">Xdeck EFB APK</div>
+        <div class="dl-desc">Companion app for your phone. Live stats, SimBrief OFP, METAR, VATSIM, and push alerts from the bridge.</div>
+        <a href="https://github.com/plen-maker/SkyBound/releases/latest/download/Xdeck-EFB.apk" class="dl-btn dl-btn-apk">
+          ⬇ Download APK
+        </a>
+        <div class="dl-note">Android 8.0+ · Enable unknown sources</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Contact -->
+<section class="contact" id="contact">
+  <div class="contact-inner">
+    <div class="section-label" style="text-align:center">Contact</div>
+    <h2 class="section-title reveal" style="text-align:center">Get in touch</h2>
+    <p class="reveal" style="color:var(--dim);font-size:16px;font-weight:300;transition-delay:.1s">Questions, bug reports, or just want to chat about sims?</p>
+    <div class="contact-cards">
+      <a href="https://discord.com/users/ddnemet" class="contact-card reveal">
+        <div class="contact-icon">💬</div>
+        <div>
+          <div class="contact-label">Discord</div>
+          <div class="contact-value">ddnemet</div>
+        </div>
+      </a>
+      <a href="mailto:ddnemet@gmail.com" class="contact-card reveal" style="transition-delay:.1s">
+        <div class="contact-icon">✉️</div>
+        <div>
+          <div class="contact-label">Email</div>
+          <div class="contact-value">ddnemet@gmail.com</div>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-left">© 2026 Xdeck EFB · Not for real world navigation</div>
+  <div class="footer-right">
+    <a href="https://github.com/plen-maker/SkyBound" style="color:var(--dim);text-decoration:none">GitHub ↗</a>
+  </div>
+</footer>
+
+<script>
+// Scroll reveal
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal, .feat').forEach(el => observer.observe(el));
+
+// Mockup stat animation
+const stats = [
+  {el: document.querySelectorAll('.mockup-stat-v.live')[0], target: 102, suffix: 'h:m', format: v => `${Math.floor(v/60)}:${String(Math.round(v%60)).padStart(2,'0')}`},
+  {el: document.querySelectorAll('.mockup-stat-v.live')[1], target: 438, suffix: 'kt', format: v => Math.round(v)},
+  {el: document.querySelectorAll('.mockup-stat-v.live')[2], target: 35000, suffix: 'ft', format: v => Math.round(v/100)*100},
+];
+// Subtle GS flicker
+setInterval(() => {
+  const gsEl = document.querySelectorAll('.mockup-stat-v.live')[1];
+  if(gsEl) {
+    const v = 436 + Math.floor(Math.random()*6);
+    gsEl.innerHTML = v + '<sub style="font-size:8px;color:var(--dim)"> kt</sub>';
+  }
+}, 2000);
+</script>
+</body>
+</html>
