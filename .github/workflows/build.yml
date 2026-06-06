@@ -1,8 +1,8 @@
-name: Xdeck EFB — Build
+name: SkyBound — Build & Release
 
 on:
   push:
-    branches: [main]
+    tags: ["*"]
   workflow_dispatch:
 
 permissions:
@@ -10,8 +10,8 @@ permissions:
 
 jobs:
 
-  # ── Windows EXE ──────────────────────────────────────────────────
-  desktop:
+  # ── Windows .exe ─────────────────────────────────────────────────
+  desktop-win:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,101 +21,28 @@ jobs:
           python-version: "3.11"
 
       - name: Install deps
-        run: pip install pywebview flask flask-cors requests pyinstaller pywin32 pythonnet pillow
+        run: pip install pywebview flask flask-cors requests pyinstaller pywin32 pythonnet
 
       - name: Build EXE
-        run: pyinstaller --onefile --windowed --name "Xdeck-EFB" --add-data "desktop/ui;ui" --add-data "desktop/version.json;." --add-data "desktop/flights;flights" --hidden-import flask --hidden-import flask_cors --hidden-import webview --hidden-import webview.platforms.winforms --hidden-import clr desktop/main.py
-
-      - name: Upload EXE to latest release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: "Xdeck EFB — Latest"
-          files: "dist/Xdeck EFB.exe"
-          make_latest: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ── Windows Installer ────────────────────────────────────────────
-  installer:
-    runs-on: windows-latest
-    needs: desktop
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install deps
-        run: pip install pillow
-
-      - name: Generate installer assets
-        shell: pwsh
         run: |
-          python -c "
-          from PIL import Image, ImageDraw, ImageFont
-          import os
-          os.makedirs('installer_assets', exist_ok=True)
-          W,H=164,314
-          img=Image.new('RGB',(W,H),'#08090e')
-          d=ImageDraw.Draw(img)
-          for y in range(H):
-              t=y/H; d.line([(0,y),(W,y)],fill=(int(6+t*10),int(7+t*11),int(12+t*18)))
-          try:
-              fxl=ImageFont.truetype('C:/Windows/Fonts/arialbd.ttf',38)
-              flg=ImageFont.truetype('C:/Windows/Fonts/arialbd.ttf',16)
-              fmd=ImageFont.truetype('C:/Windows/Fonts/arialbd.ttf',11)
-              fsm=ImageFont.truetype('C:/Windows/Fonts/arial.ttf',9)
-          except: fxl=flg=fmd=fsm=ImageFont.load_default()
-          d.rounded_rectangle([10,14,60,64],radius=10,fill=(14,16,28))
-          d.text((18,16),'X',font=fxl,fill=(94,200,255))
-          d.text((68,20),'XDECK',font=fmd,fill=(212,223,240))
-          d.text((68,36),'EFB',font=fsm,fill=(74,96,128))
-          d.line([(14,78),(W-14,78)],fill=(25,32,50),width=1)
-          d.text((14,88),'Orion',font=flg,fill=(94,200,255))
-          d.text((14,108),'v0.1.0',font=fsm,fill=(74,96,128))
-          d.line([(14,126),(W-14,126)],fill=(20,25,38),width=1)
-          feats=[('SimBrief OFP',(82,227,176)),('VATSIM ATC',(82,227,176)),('METAR',(82,227,176)),('Sim Bridge',(94,200,255)),('Push Alerts',(94,200,255)),('Android App',(167,139,250))]
-          for i,(f,col) in enumerate(feats):
-              y=138+i*24; d.text((14,y),'+ '+f,font=fsm,fill=col)
-          img.save('installer_assets/installer_banner.bmp')
-          img2=Image.new('RGB',(55,55),'#08090e')
-          d2=ImageDraw.Draw(img2)
-          d2.rounded_rectangle([3,3,52,52],radius=12,fill=(14,16,28),outline=(94,200,255),width=2)
-          d2.text((10,8),'X',font=fxl,fill=(94,200,255))
-          img2.save('installer_assets/installer_icon.bmp')
-          ico=Image.new('RGBA',(256,256),(8,9,14,255))
-          d3=ImageDraw.Draw(ico)
-          d3.rounded_rectangle([16,16,240,240],radius=50,fill=(14,16,24,255))
-          try: fico=ImageFont.truetype('C:/Windows/Fonts/arialbd.ttf',170)
-          except: fico=ImageFont.load_default()
-          d3.text((28,14),'X',font=fico,fill=(94,200,255,255))
-          ico.save('installer_assets/icon.ico',format='ICO',sizes=[(256,256),(128,128),(64,64),(32,32),(16,16)])
-          print('Assets ok')
-          "
+          pyinstaller --onefile --windowed ^
+            --name "Axesta" ^
+            --add-data "desktop\ui;ui" ^
+            --add-data "desktop\version.json;." ^
+            --hidden-import flask ^
+            --hidden-import flask_cors ^
+            --hidden-import webview ^
+            --hidden-import webview.platforms.winforms ^
+            --hidden-import clr ^
+            desktop\main.py
 
-      - name: Install Inno Setup
-        run: choco install innosetup --yes --no-progress
-
-      - name: Build Installer
-        run: |
-          New-Item -ItemType Directory -Force -Path installer_out
-          iscc installer.iss
-        shell: pwsh
-
-      - name: Upload Installer to latest release
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          tag_name: latest
-          name: "Xdeck EFB — Latest"
-          files: installer_out/*.exe
-          make_latest: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: axesta-win
+          path: dist/Axesta.exe
 
   # ── Android APK ──────────────────────────────────────────────────
-  android:
+  mobile-apk:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -132,13 +59,17 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install deps
+      - name: Install mobile deps
         working-directory: mobile
         run: npm install
 
-      - name: Expo prebuild
+      - name: Build React
         working-directory: mobile
-        run: npx expo prebuild --platform android --clean
+        run: npm run build
+
+      - name: Capacitor sync
+        working-directory: mobile
+        run: npx cap sync android
 
       - name: Build APK
         working-directory: mobile/android
@@ -155,22 +86,35 @@ jobs:
           keyPassword: ${{ secrets.KEY_PASSWORD }}
         continue-on-error: true
 
-      - name: Rename APK
-        run: |
-          SRC=mobile/android/app/build/outputs/apk/release
-          APK=$(find $SRC -name "*.apk" | head -1)
-          if [ -n "$APK" ]; then
-            cp "$APK" $SRC/Xdeck-EFB.apk
-          else
-            echo "No APK found"; exit 1
-          fi
+      - name: Copy unsigned if sign failed
+        if: steps.sign.outcome == 'failure'
+        run: cp mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk mobile/android/app/build/outputs/apk/release/SkyBound.apk
 
-      - name: Upload APK to latest release
-        uses: softprops/action-gh-release@v2
+      - name: Rename signed APK
+        if: steps.sign.outcome == 'success'
+        run: mv ${{ steps.sign.outputs.signedReleaseFile }} mobile/android/app/build/outputs/apk/release/SkyBound.apk
+
+      - uses: actions/upload-artifact@v4
         with:
-          tag_name: latest
-          name: "Xdeck EFB — Latest"
-          files: mobile/android/app/build/outputs/apk/release/Xdeck-EFB.apk
-          make_latest: true
+          name: skybound-apk
+          path: mobile/android/app/build/outputs/apk/release/SkyBound.apk
+
+  # ── GitHub Release ───────────────────────────────────────────────
+  release:
+    needs: [desktop-win, mobile-apk]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: "Axesta ${{ github.ref_name }}"
+          files: |
+            artifacts/axesta-win/Axesta.exe
+            artifacts/skybound-apk/SkyBound.apk
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
