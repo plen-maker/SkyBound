@@ -158,10 +158,11 @@ jobs:
       - name: Rename APK
         run: |
           SRC=mobile/android/app/build/outputs/apk/release
-          if [ -f "${{ steps.sign.outputs.signedReleaseFile }}" ]; then
-            mv "${{ steps.sign.outputs.signedReleaseFile }}" $SRC/Xdeck-EFB.apk
+          APK=$(find $SRC -name "*.apk" | head -1)
+          if [ -n "$APK" ]; then
+            cp "$APK" $SRC/Xdeck-EFB.apk
           else
-            cp $SRC/app-release-unsigned.apk $SRC/Xdeck-EFB.apk
+            echo "No APK found"; exit 1
           fi
 
       - name: Upload APK to latest release
