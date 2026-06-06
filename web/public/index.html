@@ -450,20 +450,20 @@ footer{
     <div class="dl-grid">
       <div class="dl-card reveal">
         <div class="dl-platform">Windows · Installer</div>
-        <div class="dl-name">Xdeck EFB Setup</div>
-        <div class="dl-desc">The recommended way. Downloads Xdeck EFB, sets up SimBridge, creates desktop shortcut, and handles automatic updates — one click.</div>
-        <a href="https://github.com/plen-maker/SkyBound/releases/download/latest/Xdeck-EFB-Setup-Orion.exe" class="dl-btn dl-btn-installer">
-          ⬇ Download Installer
+        <div class="dl-name">Xdeck EFB Setup <span id="winVer" style="font-size:13px;color:var(--dim);font-family:var(--mono);font-weight:400"></span></div>
+        <div class="dl-desc">The recommended way. Installs Xdeck EFB, creates desktop shortcut — one click.</div>
+        <a id="winDlBtn" href="#" class="dl-btn dl-btn-installer" style="opacity:.4;pointer-events:none">
+          ⬇ Loading...
         </a>
         <div class="dl-note">Windows 10/11 · 64-bit</div>
       </div>
 
       <div class="dl-card reveal" style="transition-delay:.2s">
         <div class="dl-platform">Android</div>
-        <div class="dl-name">Xdeck EFB APK</div>
+        <div class="dl-name">Xdeck EFB APK <span id="apkVer" style="font-size:13px;color:var(--dim);font-family:var(--mono);font-weight:400"></span></div>
         <div class="dl-desc">Companion app for your phone. Live stats, SimBrief OFP, METAR, VATSIM, and push alerts from the bridge.</div>
-        <a href="https://github.com/plen-maker/SkyBound/releases/download/latest/Xdeck-EFB.apk" class="dl-btn dl-btn-apk">
-          ⬇ Download APK
+        <a id="apkDlBtn" href="#" class="dl-btn dl-btn-apk" style="opacity:.4;pointer-events:none">
+          ⬇ Loading...
         </a>
         <div class="dl-note">Android 8.0+ · Enable unknown sources</div>
       </div>
@@ -499,24 +499,59 @@ footer{
 <!-- Footer -->
 <footer>
   <div class="footer-left">© 2026 Xdeck EFB · Not for real world navigation</div>
-  <div class="footer-right">
+  <div class="footer-right" style="display:flex;align-items:center;gap:20px">
     <a href="https://github.com/plen-maker/SkyBound" style="color:var(--dim);text-decoration:none">GitHub ↗</a>
+    <a href="/dev.html" style="color:var(--dim2);text-decoration:none;font-size:11px">dev</a>
   </div>
 </footer>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script>
+firebase.initializeApp({
+  apiKey:"AIzaSyAxHmLWOIJl4xC44uHsRbxqzRhF4mA0kqE",
+  authDomain:"simapp-99f40.firebaseapp.com",
+  databaseURL:"https://simapp-99f40-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:"simapp-99f40",messagingSenderId:"993511543138",
+  appId:"1:993511543138:web:ec3a0d3e19713160111c3b"
+});
+
+// Load release info from Firebase
+firebase.database().ref("releases/latest").once("value").then(snap=>{
+  const r=snap.val();
+  if(!r)return;
+  const ver=`v${r.version||""}`;
+  if(r.installer_url){
+    const btn=document.getElementById("winDlBtn");
+    btn.href=r.installer_url;btn.style.opacity="1";btn.style.pointerEvents="auto";
+    btn.innerHTML="⬇ Download Installer";
+    const vEl=document.getElementById("winVer");if(vEl)vEl.textContent=ver;
+  }
+  if(r.apk_url){
+    const btn=document.getElementById("apkDlBtn");
+    btn.href=r.apk_url;btn.style.opacity="1";btn.style.pointerEvents="auto";
+    btn.innerHTML="⬇ Download APK";
+    const vEl=document.getElementById("apkVer");if(vEl)vEl.textContent=ver;
+  }
+  // Update hero badge
+  const badge=document.querySelector(".hero-badge");
+  if(badge&&r.codename&&r.version){
+    badge.innerHTML=`<div class="live-dot"></div>${r.codename} · v${r.version} — Now Available`;
+  }
+}).catch(()=>{
+  // Fallback: show buttons without URLs hidden
+  ["winDlBtn","apkDlBtn"].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.style.opacity="0.5";el.textContent="Download (unavailable)";}
+  });
+});
+
 // Scroll reveal
 const observer = new IntersectionObserver((entries) => {
   entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
 }, { threshold: 0.1 });
 document.querySelectorAll('.reveal, .feat').forEach(el => observer.observe(el));
 
-// Mockup stat animation
-const stats = [
-  {el: document.querySelectorAll('.mockup-stat-v.live')[0], target: 102, suffix: 'h:m', format: v => `${Math.floor(v/60)}:${String(Math.round(v%60)).padStart(2,'0')}`},
-  {el: document.querySelectorAll('.mockup-stat-v.live')[1], target: 438, suffix: 'kt', format: v => Math.round(v)},
-  {el: document.querySelectorAll('.mockup-stat-v.live')[2], target: 35000, suffix: 'ft', format: v => Math.round(v/100)*100},
-];
 // Subtle GS flicker
 setInterval(() => {
   const gsEl = document.querySelectorAll('.mockup-stat-v.live')[1];

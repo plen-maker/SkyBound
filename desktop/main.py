@@ -131,6 +131,11 @@ def metar():
         return jsonify({"error":str(e)})
 
 
+def get_bridge_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.join(os.path.dirname(sys.executable), "bridge")
+    return os.path.join(os.path.dirname(BASE), "bridge")
+
 _bridge_proc = None
 
 @app.route("/api/bridge/status")
@@ -141,21 +146,60 @@ def bridge_status():
     _bridge_proc = None
     return jsonify({"running": False})
 
+@app.route("/api/bridge/env", methods=["GET", "POST"])
+def bridge_env():
+    env_path = os.path.join(get_bridge_dir(), ".env")
+    if request.method == "POST":
+        data = request.json or {}
+        try:
+            lines = [f"{k}={v}" for k, v in data.items() if v is not None]
+            with open(env_path, "w") as f:
+                f.write("\n".join(lines) + "\n")
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"error": str(e)})
+    result = {}
+    try:
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, _, v = line.partition("=")
+                    result[k.strip()] = v.strip()
+    except Exception:
+        pass
+    return jsonify(result)
+
 @app.route("/api/bridge/start", methods=["POST"])
 def bridge_start():
     global _bridge_proc
     if _bridge_proc and _bridge_proc.poll() is None:
         return jsonify({"ok": True, "already": True})
-    bridge_dir = os.path.join(os.path.dirname(BASE), "bridge")
+    bridge_dir = get_bridge_dir()
     env_file = os.path.join(bridge_dir, ".env")
     if not os.path.exists(bridge_dir):
         return jsonify({"error": "Bridge mappa nem található: " + bridge_dir})
     if not os.path.exists(env_file):
         return jsonify({"error": ".env fájl hiányzik a bridge mappából"})
+    env = load_json(env_file.replace(".env", ".env"), {})
+    sim_mode = "--simconnect"
+    try:
+        with open(env_file) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("SIM_MODE="):
+                    val = line.split("=", 1)[1].strip()
+                    if val == "fsuipc":
+                        sim_mode = "--fsuipc"
+                    elif val == "auto":
+                        sim_mode = ""
+    except Exception:
+        pass
     try:
         node = "node.exe" if os.name == "nt" else "node"
+        cmd = [node, "src/index.js"] + ([sim_mode] if sim_mode else [])
         _bridge_proc = subprocess.Popen(
-            [node, "src/index.js", "--simconnect"],
+            cmd,
             cwd=bridge_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

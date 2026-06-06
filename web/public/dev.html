@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Xdeck EFB — Developer</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#05060c;--p1:#0a0c18;--p2:#0f1224;--line:#1a2040;
+  --cy:#4df0ff;--gn:#3dffc8;--am:#ffb547;--rd:#ff4d6d;--pu:#b47cff;
+  --tx:#e8eeff;--dim:#4a5880;
+  --font:'Syne',sans-serif;--body:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+body{background:var(--bg);color:var(--tx);font-family:var(--body);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");opacity:.4}
+.wrap{position:relative;z-index:1;width:100%;max-width:520px}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:32px}
+.logo-icon{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--cy),var(--pu));display:flex;align-items:center;justify-content:center;font-family:var(--font);font-weight:800;font-size:18px;color:#05060c}
+.logo-text{font-family:var(--font);font-weight:800;font-size:16px}
+.logo-badge{font-size:10px;font-family:var(--mono);color:var(--am);background:rgba(255,181,71,.08);border:1px solid rgba(255,181,71,.2);border-radius:99px;padding:2px 8px;margin-left:4px}
+.card{background:var(--p1);border:1px solid var(--line);border-radius:16px;padding:28px}
+.card-title{font-family:var(--font);font-weight:800;font-size:20px;margin-bottom:6px}
+.card-sub{font-size:13px;color:var(--dim);margin-bottom:24px;font-weight:300}
+.sect{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim);font-family:var(--mono);margin:20px 0 10px}
+.sect:first-of-type{margin-top:0}
+.field{margin-bottom:12px}
+.field label{font-size:11px;color:var(--dim);display:block;margin-bottom:5px;font-family:var(--mono)}
+.field input,.field select{
+  width:100%;background:var(--p2);border:1px solid var(--line);color:var(--tx);
+  font-size:13px;border-radius:8px;padding:9px 12px;font-family:var(--body);outline:none;
+  transition:border-color .2s,box-shadow .2s
+}
+.field input:focus,.field select:focus{border-color:var(--cy);box-shadow:0 0 0 3px rgba(77,240,255,.08)}
+.field select option{background:var(--p2)}
+.btn{
+  width:100%;padding:12px;border:none;border-radius:9px;font-size:14px;font-weight:700;
+  font-family:var(--font);cursor:pointer;transition:opacity .2s,transform .15s;margin-top:8px
+}
+.btn-pub{background:linear-gradient(135deg,var(--cy),var(--pu));color:#05060c}
+.btn-pub:hover{opacity:.9;transform:translateY(-1px)}
+.btn-pub:disabled{opacity:.4;cursor:default;transform:none}
+.btn-out{background:var(--p2);color:var(--dim);border:1px solid var(--line);margin-top:6px}
+.btn-out:hover{color:var(--tx)}
+.msg{font-size:12px;margin-top:10px;min-height:18px;font-family:var(--mono);padding:8px 12px;border-radius:7px;display:none}
+.msg.ok{display:block;background:rgba(61,255,200,.06);border:1px solid rgba(61,255,200,.2);color:var(--gn)}
+.msg.err{display:block;background:rgba(255,77,109,.06);border:1px solid rgba(255,77,109,.2);color:var(--rd)}
+.sep{height:1px;background:var(--line);margin:20px 0}
+.cur-rel{background:var(--p2);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:20px}
+.cur-rel-label{font-size:9px;font-family:var(--mono);color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px}
+.cur-rel-ver{font-family:var(--font);font-size:18px;font-weight:800;color:var(--cy)}
+.cur-rel-meta{font-size:11px;color:var(--dim);margin-top:4px;font-family:var(--mono)}
+
+/* Auth screen */
+#authScreen{display:flex;flex-direction:column;gap:10px}
+#devScreen{display:none}
+#loggedOut{display:none;text-align:center;padding:20px 0}
+#loggedOut p{color:var(--dim);font-size:13px;margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">
+    <div class="logo-icon">✈</div>
+    <span class="logo-text">XDECK EFB</span>
+    <span class="logo-badge">DEV</span>
+  </div>
+
+  <div class="card">
+    <!-- Auth screen -->
+    <div id="authScreen">
+      <div class="card-title">Developer Login</div>
+      <div class="card-sub">Only authorised developers can access this panel.</div>
+      <div class="field"><label>EMAIL</label><input id="email" type="email" placeholder="ddnemet@gmail.com"/></div>
+      <div class="field"><label>PASSWORD</label><input id="pw" type="password" placeholder="••••••••"/></div>
+      <div class="msg" id="authMsg"></div>
+      <button class="btn btn-pub" id="loginBtn" onclick="doLogin()">Sign in</button>
+    </div>
+
+    <!-- Not a developer -->
+    <div id="loggedOut">
+      <p>This account doesn't have developer access.</p>
+      <button class="btn btn-out" onclick="firebase.auth().signOut()">Sign out</button>
+    </div>
+
+    <!-- Dev panel -->
+    <div id="devScreen">
+      <div class="card-title">Release Publisher</div>
+      <div class="card-sub" id="devEmail" style="margin-bottom:16px"></div>
+
+      <div class="cur-rel" id="curRel" style="display:none">
+        <div class="cur-rel-label">Current live release</div>
+        <div class="cur-rel-ver" id="curVer">—</div>
+        <div class="cur-rel-meta" id="curMeta">—</div>
+      </div>
+
+      <div class="sect">Version info</div>
+      <div class="field"><label>CODENAME</label><input id="codename" placeholder="pl. Phoenix"/></div>
+      <div class="field"><label>VERSION</label><input id="version" placeholder="pl. 0.2.0"/></div>
+      <div class="field">
+        <label>CHANNEL</label>
+        <select id="channel">
+          <option value="release">release</option>
+          <option value="beta">beta</option>
+          <option value="dev">dev</option>
+        </select>
+      </div>
+
+      <div class="sect">Download URLs</div>
+      <div class="field"><label>WINDOWS INSTALLER URL</label><input id="installer_url" placeholder="https://github.com/.../Xdeck-EFB-Setup-Phoenix.exe"/></div>
+      <div class="field"><label>ANDROID APK URL</label><input id="apk_url" placeholder="https://github.com/.../Xdeck-EFB.apk"/></div>
+
+      <div class="sect">Changelog</div>
+      <div class="field"><label>NOTES (optional)</label><input id="changelog" placeholder="What's new in this release..."/></div>
+
+      <div class="msg" id="pubMsg"></div>
+      <button class="btn btn-pub" id="pubBtn" onclick="publish()">🚀 Publish Release</button>
+      <button class="btn btn-out" onclick="firebase.auth().signOut()">Sign out</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+firebase.initializeApp({
+  apiKey:"AIzaSyAxHmLWOIJl4xC44uHsRbxqzRhF4mA0kqE",
+  authDomain:"simapp-99f40.firebaseapp.com",
+  databaseURL:"https://simapp-99f40-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:"simapp-99f40",messagingSenderId:"993511543138",
+  appId:"1:993511543138:web:ec3a0d3e19713160111c3b"
+});
+const auth=firebase.auth(), db=firebase.database();
+
+const ALLOWED_EMAIL="ddnemet@gmail.com";
+
+function showMsg(id,text,type){
+  const el=document.getElementById(id);
+  el.textContent=text;el.className="msg "+type;
+}
+
+async function doLogin(){
+  const email=document.getElementById("email").value;
+  const pw=document.getElementById("pw").value;
+  if(!email||!pw){showMsg("authMsg","Fill in both fields.","err");return;}
+  document.getElementById("loginBtn").disabled=true;
+  document.getElementById("loginBtn").textContent="Signing in...";
+  try{
+    await auth.signInWithEmailAndPassword(email,pw);
+  }catch(e){
+    showMsg("authMsg",e.message,"err");
+    document.getElementById("loginBtn").disabled=false;
+    document.getElementById("loginBtn").textContent="Sign in";
+  }
+}
+
+document.getElementById("email").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("pw").focus()});
+document.getElementById("pw").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin()});
+
+async function loadCurrentRelease(){
+  try{
+    const snap=await db.ref("releases/latest").once("value");
+    const r=snap.val();
+    if(!r)return;
+    document.getElementById("curRel").style.display="block";
+    document.getElementById("curVer").textContent=`${r.codename||""} v${r.version||"—"}`;
+    const d=r.updated_at?new Date(r.updated_at).toLocaleString("hu-HU"):"—";
+    document.getElementById("curMeta").textContent=`${r.channel||"release"} · ${d}`;
+    // Pre-fill form
+    ["codename","version","installer_url","apk_url","changelog"].forEach(k=>{
+      if(r[k])document.getElementById(k).value=r[k];
+    });
+    if(r.channel)document.getElementById("channel").value=r.channel;
+  }catch{}
+}
+
+async function publish(){
+  const get=id=>document.getElementById(id).value.trim();
+  const codename=get("codename"),version=get("version");
+  if(!codename||!version){showMsg("pubMsg","Codename and version are required.","err");return;}
+  const installer_url=get("installer_url"),apk_url=get("apk_url");
+  if(!installer_url&&!apk_url){showMsg("pubMsg","At least one download URL is required.","err");return;}
+
+  const btn=document.getElementById("pubBtn");
+  btn.disabled=true;btn.textContent="Publishing...";
+
+  try{
+    await db.ref("releases/latest").set({
+      codename,version,
+      channel:document.getElementById("channel").value,
+      installer_url,apk_url,
+      changelog:get("changelog"),
+      updated_at:Date.now(),
+      updated_by:auth.currentUser?.email||""
+    });
+    showMsg("pubMsg",`✓ Published: ${codename} v${version}`,"ok");
+    loadCurrentRelease();
+  }catch(e){
+    showMsg("pubMsg","Error: "+e.message,"err");
+  }
+  btn.disabled=false;btn.textContent="🚀 Publish Release";
+}
+
+auth.onAuthStateChanged(async user=>{
+  document.getElementById("authScreen").style.display=user?"none":"flex";
+  document.getElementById("loggedOut").style.display="none";
+  document.getElementById("devScreen").style.display="none";
+  if(!user)return;
+
+  // Check developer access
+  const key=(user.email||"").replace(/\./g,",");
+  const snap=await db.ref(`developers/${key}`).once("value");
+  const isDev=snap.val()===true;
+
+  if(!isDev){
+    document.getElementById("loggedOut").style.display="block";
+    return;
+  }
+  document.getElementById("devEmail").textContent=user.email;
+  document.getElementById("devScreen").style.display="block";
+  loadCurrentRelease();
+});
+</script>
+</body>
+</html>
