@@ -1,7 +1,7 @@
 {
   "name": "xdeck-efb",
   "version": "0.1.0",
-  "main": "App.jsx",
+  "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
