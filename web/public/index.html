@@ -199,7 +199,7 @@ nav{
   border-bottom:1px solid var(--line);position:relative;z-index:1;
 }
 .downloads-inner{max-width:1200px;margin:0 auto}
-.dl-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:48px}
+.dl-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:48px;max-width:800px}
 .dl-card{
   background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:28px;
   display:flex;flex-direction:column;gap:12px;
@@ -289,7 +289,7 @@ footer{
 <!-- Nav -->
 <nav>
   <a href="#" class="nav-logo">
-    <div class="nav-logo-icon">X</div>
+    <div class="nav-logo-icon">✈</div>
     <span class="nav-logo-text">XDECK EFB</span>
   </a>
   <div class="nav-links">
@@ -451,26 +451,18 @@ footer{
       <div class="dl-card reveal">
         <div class="dl-platform">Windows · Installer</div>
         <div class="dl-name">Xdeck EFB Setup</div>
-        <div class="dl-desc">The recommended way to install. Includes SimBridge setup, desktop shortcut, and automatic updates.</div>
-        <a href="https://github.com/plen-maker/SkyBound/releases/latest/download/Xdeck-EFB-Setup-Orion.exe" class="dl-btn dl-btn-installer">
+        <div class="dl-desc">The recommended way. Downloads Xdeck EFB, sets up SimBridge, creates desktop shortcut, and handles automatic updates — one click.</div>
+        <a href="https://github.com/plen-maker/SkyBound/releases/download/latest/Xdeck-EFB-Setup-Orion.exe" class="dl-btn dl-btn-installer">
           ⬇ Download Installer
         </a>
         <div class="dl-note">Windows 10/11 · 64-bit</div>
       </div>
-      <div class="dl-card reveal" style="transition-delay:.1s">
-        <div class="dl-platform">Windows · Portable</div>
-        <div class="dl-name">Xdeck EFB.exe</div>
-        <div class="dl-desc">Standalone executable, no installation required. Just download and run. Bridge must be set up separately.</div>
-        <a href="https://github.com/plen-maker/SkyBound/releases/latest/download/Xdeck EFB.exe" class="dl-btn dl-btn-win">
-          ⬇ Download EXE
-        </a>
-        <div class="dl-note">Windows 10/11 · 64-bit · Portable</div>
-      </div>
+
       <div class="dl-card reveal" style="transition-delay:.2s">
         <div class="dl-platform">Android</div>
         <div class="dl-name">Xdeck EFB APK</div>
         <div class="dl-desc">Companion app for your phone. Live stats, SimBrief OFP, METAR, VATSIM, and push alerts from the bridge.</div>
-        <a href="https://github.com/plen-maker/SkyBound/releases/latest/download/Xdeck-EFB.apk" class="dl-btn dl-btn-apk">
+        <a href="https://github.com/plen-maker/SkyBound/releases/download/latest/Xdeck-EFB.apk" class="dl-btn dl-btn-apk">
           ⬇ Download APK
         </a>
         <div class="dl-note">Android 8.0+ · Enable unknown sources</div>

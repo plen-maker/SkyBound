@@ -68,12 +68,12 @@ begin
   WizardForm.WelcomeLabel1.Caption := 'Welcome to Xdeck EFB';
   WizardForm.WelcomeLabel2.Caption :=
     'Xdeck EFB is an Electronic Flight Bag for Microsoft Flight Simulator 2020/2024.' +
-    Chr(13)+Chr(10) + Chr(13)+Chr(10) +
-    'This installer will:' + Chr(13)+Chr(10) +
-    '  - Download and install Xdeck EFB' + Chr(13)+Chr(10) +
-    '  - Optionally install the SimBridge' + Chr(13)+Chr(10) +
+    #13#10 + #13#10 +
+    'This installer will:' + #13#10 +
+    '  - Download and install Xdeck EFB' + #13#10 +
+    '  - Optionally install the SimBridge' + #13#10 +
     '  - Set up desktop shortcut and startup options' +
-    Chr(13)+Chr(10) + Chr(13)+Chr(10) +
+    #13#10 + #13#10 +
     'Release: Orion v0.1.0';
 
   DownloadPage := CreateDownloadPage(
@@ -91,7 +91,7 @@ begin
   if CurPageID = wpReady then begin
     DownloadPage.Clear;
     DownloadPage.Add(
-      '{#ReleaseURL}/Xdeck EFB.exe',
+      'https://github.com/plen-maker/SkyBound/releases/download/latest/Xdeck EFB.exe',
       'Xdeck EFB.exe', ''
     );
     if WizardIsTaskSelected('bridge') then begin
@@ -144,10 +144,10 @@ begin
       if not FileExists(ExpandConstant('{app}\bridge\.env')) then begin
         SaveStringToFile(
           ExpandConstant('{app}\bridge\.env'),
-          'SKYBOUND_SESSION=your-session-code' + Chr(13)+Chr(10) +
-          'SIMBRIEF_USERNAME=your-simbrief-username' + Chr(13)+Chr(10) +
-          'FIREBASE_SERVICE_ACCOUNT=./serviceAccountKey.json' + Chr(13)+Chr(10) +
-          'SIM_MODE=simconnect' + Chr(13)+Chr(10),
+          'SKYBOUND_SESSION=your-session-code' + #13#10 +
+          'SIMBRIEF_USERNAME=your-simbrief-username' + #13#10 +
+          'FIREBASE_SERVICE_ACCOUNT=./serviceAccountKey.json' + #13#10 +
+          'SIM_MODE=simconnect' + #13#10,
           False
         );
       end;
