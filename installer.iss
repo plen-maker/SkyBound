@@ -70,9 +70,9 @@ begin
     'Xdeck EFB is an Electronic Flight Bag for Microsoft Flight Simulator 2020/2024.' +
     #13#10 + #13#10 +
     'This installer will:' + #13#10 +
-    '  • Download and install Xdeck EFB' + #13#10 +
-    '  • Optionally install the SimBridge' + #13#10 +
-    '  • Set up desktop shortcut and startup options' +
+    '  - Download and install Xdeck EFB' + #13#10 +
+    '  - Optionally install the SimBridge' + #13#10 +
+    '  - Set up desktop shortcut and startup options' +
     #13#10 + #13#10 +
     'Release: Orion v0.1.0';
 
