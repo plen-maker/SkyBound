@@ -571,7 +571,11 @@ function connectRTDB(){
   const sc=S.cfg.sessionCode;if(!sc)return;
   let lt;
   const r1=db.ref("sessions/"+sc+"/live");
-  r1.on("value",s=>{clearTimeout(lt);lt=setTimeout(()=>{S.live=s.val();renderBar();},300);},()=>{});
+  r1.on("value",s=>{clearTimeout(lt);lt=setTimeout(()=>{
+    const prev=S.live;S.live=s.val();
+    if(prev?.onGround===true&&S.live?.onGround===false)window._takeoffTs=Date.now();
+    renderBar();
+  },300);},()=>{});
   _uns.push(()=>r1.off());
   const r2=db.ref(".info/connected");
   r2.on("value",s=>{S.rtdb=s.val()===true;renderBar();},()=>{});
@@ -580,7 +584,12 @@ function connectRTDB(){
   r3.on("value",s=>{const v=s.val();S.triggers=v?Object.entries(v).map(([id,d])=>({id,...d})):[];if(S.tab==="alerts")renderTab();},()=>{});
   _uns.push(()=>r3.off());
   const r4=db.ref("sessions/"+sc+"/lastLanding");
-  r4.on("value",s=>{S.landing=s.val();if(S.tab==="landing")renderTab();},()=>{});
+  r4.on("value",s=>{
+    const nv=s.val();
+    if(nv&&nv.ts!==S.landing?.ts)_logbookAdd(nv);
+    S.landing=nv;
+    if(S.tab==="landing")renderTab();
+  },()=>{});
   _uns.push(()=>r4.off());
 }
 
@@ -631,7 +640,10 @@ function renderSidebar(){
   out.addEventListener("click",()=>auth.signOut());
   sb.appendChild(out);
 }
-function navTo(tab){S.tab=tab;renderSidebar();renderTab();}
+function navTo(tab){
+  clearInterval(window._gpPoll);window._gpPoll=null;
+  S.tab=tab;renderSidebar();renderTab();
+}
 
 function renderTab(){
   const m=$("main");if(!m)return;
@@ -1141,17 +1153,69 @@ function _ccRenderOfficial(m,ac){
 }
 
 function _ccRenderCustom(m){
-  const sl2=el("div","sl");sl2.textContent="Vezérlők";m.appendChild(sl2);
-  const grid=el("div","g2 anim");
-  Object.entries(CC_CTRL).forEach(([,c])=>{
-    const btn=el("button","tile");btn.style.cssText="text-align:center;padding:10px";
-    btn.innerHTML=`<img src='${c.img}' alt='${c.n}' style='width:100%;height:62px;object-fit:contain;margin-bottom:6px'><div style='font-size:10px;font-weight:700'>${c.n}</div>`;
-    grid.appendChild(btn);
-  });
-  m.appendChild(grid);
-  const ph=el("div","card anim");ph.style.cssText="text-align:center;padding:22px;margin-top:8px";
-  ph.innerHTML="<div style='font-size:13px;color:var(--dim);margin-bottom:5px'>🚧 Interaktív gomb konfiguráció</div><div style='font-size:11px;color:var(--dim)'>Hamarosan</div>";
-  m.appendChild(ph);
+  const sl2=el("div","sl");sl2.textContent="Csatlakoztatott vezérlők — élő nézet";m.appendChild(sl2);
+  const hint=el("div");hint.style.cssText="font-size:10px;color:var(--dim);margin-bottom:10px";hint.textContent="Mozgasd a tengelyeket és nyomd meg a gombokat — valós időben látod a kimeneteket.";m.appendChild(hint);
+  const cont=el("div");cont.id="_gpCont";m.appendChild(cont);
+  const gpMap=new Map();
+
+  function updateGP(){
+    if(S.tab!=="ctrl"||_ccTab!=="custom"){clearInterval(window._gpPoll);window._gpPoll=null;return;}
+    const gps=Array.from(navigator.getGamepads?.()??[]).filter(Boolean);
+    if(!gps.length){
+      if(!cont.querySelector(".no-gp"))cont.innerHTML=`<div class='card no-gp anim' style='text-align:center;padding:32px 20px;color:var(--dim)'>Nincs csatlakoztatott vezérlő<br><span style='font-size:10px'>Csatlakoztasd a kontrollert és nyomj egy gombot.</span></div>`;
+      return;
+    }
+    cont.querySelector(".no-gp")?.remove();
+    gps.forEach(gp=>{
+      if(!gpMap.has(gp.index)){
+        const card=el("div","card anim");card.id=`_gpc_${gp.index}`;card.style.marginBottom="8px";
+        const ghdr=el("div");ghdr.style.cssText="font-weight:700;font-size:12px;margin-bottom:2px";ghdr.textContent=gp.id.substring(0,60);
+        const gsub=el("div");gsub.style.cssText="font-size:9px;color:var(--dim);margin-bottom:10px";gsub.textContent=`${gp.axes.length} tengely · ${gp.buttons.length} gomb`;
+        card.appendChild(ghdr);card.appendChild(gsub);
+
+        const axWrap=el("div");
+        const axEls=gp.axes.map((_,i)=>{
+          const row=el("div");row.style.cssText="display:flex;align-items:center;gap:8px;margin-bottom:5px";
+          const lbl=el("span");lbl.style.cssText="font-size:10px;color:var(--dim);width:52px;flex-shrink:0";lbl.textContent=`Axis ${i}`;
+          const track=el("div");track.style.cssText="flex:1;height:7px;background:var(--p2);border-radius:4px;border:1px solid var(--line);overflow:hidden;position:relative";
+          const ctr=el("div");ctr.style.cssText="position:absolute;left:50%;top:0;width:1px;height:100%;background:rgba(255,255,255,.12)";
+          const fill=el("div");fill.style.cssText="position:absolute;height:100%;background:var(--cy);transition:all .04s";
+          track.appendChild(ctr);track.appendChild(fill);
+          const val=el("span");val.style.cssText="font-size:10px;font-variant-numeric:tabular-nums;width:40px;text-align:right;color:var(--tx)";
+          row.appendChild(lbl);row.appendChild(track);row.appendChild(val);
+          axWrap.appendChild(row);
+          return{fill,val};
+        });
+        card.appendChild(axWrap);
+
+        const btWrap=el("div");btWrap.style.cssText="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px";
+        const btEls=gp.buttons.map((_,i)=>{
+          const b=el("div");b.style.cssText="min-width:26px;height:26px;border-radius:6px;border:1px solid var(--line);background:var(--p2);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--dim);transition:background .06s,color .06s;padding:0 5px";b.textContent=i;
+          btWrap.appendChild(b);return b;
+        });
+        card.appendChild(btWrap);
+        cont.appendChild(card);
+        gpMap.set(gp.index,{axEls,btEls});
+      }
+      const{axEls,btEls}=gpMap.get(gp.index);
+      gp.axes.forEach((v,i)=>{
+        const e=axEls[i];if(!e)return;
+        const pct=Math.abs(v)*50;const ml=v<0?50-pct:50;
+        e.fill.style.width=pct+"%";e.fill.style.left=ml+"%";
+        e.fill.style.background=Math.abs(v)>0.05?"var(--cy)":"var(--line)";
+        e.val.textContent=v.toFixed(3);
+      });
+      gp.buttons.forEach((b,i)=>{
+        const el2=btEls[i];if(!el2)return;
+        el2.style.background=b.pressed?"var(--cy)":"var(--p2)";
+        el2.style.color=b.pressed?"var(--bg)":"var(--dim)";
+        el2.style.borderColor=b.pressed?"var(--cy)":"var(--line)";
+      });
+    });
+  }
+  updateGP();
+  clearInterval(window._gpPoll);
+  window._gpPoll=setInterval(updateGP,80);
 }
 
 
@@ -1575,6 +1639,20 @@ async function openDevPanel(){
   content.appendChild(pubBtn);
 }
 
+// ── LOGBOOK ───────────────────────────────────────────────────────
+function _logbookGet(){try{return JSON.parse(localStorage.getItem("xdeck_logbook")||"[]");}catch{return [];}}
+function _logbookAdd(land){
+  const ftMin=window._takeoffTs?Math.round((land.ts-window._takeoffTs)/60000):null;
+  const entry={dep:S.ofp?.dep||null,arr:S.ofp?.arr||null,aircraft:land.aircraftTitle||null,
+    fpm:land.fpm,gs:land.gs,ias:land.ias,ftMin,ts:land.ts};
+  const lb=_logbookGet();
+  if(lb.find(e=>e.ts===entry.ts))return;
+  lb.unshift(entry);if(lb.length>100)lb.pop();
+  localStorage.setItem("xdeck_logbook",JSON.stringify(lb));
+}
+function _fmtFt(min){if(!min)return"—";const h=Math.floor(min/60),m=min%60;return h?`${h}h ${m}m`:`${m}m`;}
+function _qLabel(fpm){const a=Math.abs(fpm);if(a<=200)return["Greaser","#52e3b0"];if(a<=400)return["Smooth","#5ec8ff"];if(a<=600)return["Firm","#ffb454"];if(a<=900)return["Hard","#f06080"];return["Bounce","#a78bfa"];}
+
 // ── LANDING ───────────────────────────────────────────────────────
 function renderLanding(m){
   const sl=el("div","sl anim");sl.textContent="Landing Analysis";m.appendChild(sl);
@@ -1664,6 +1742,50 @@ function renderLanding(m){
     const loc=el("div","card anim");loc.style.cssText="animation-delay:60ms;font-size:10px;color:var(--dim)";
     loc.innerHTML=`<span style='color:var(--tx)'>Érintési pont:</span> ${land.lat.toFixed(5)}°, ${land.lon.toFixed(5)}°`;
     m.appendChild(loc);
+  }
+
+  // ── Logbook ──────────────────────────────────────────────────────
+  const lb=_logbookGet();
+  const slLb=el("div","sl anim");slLb.style.cssText="margin-top:18px;animation-delay:80ms";slLb.textContent="Repülési napló";m.appendChild(slLb);
+
+  if(!lb.length){
+    const emp=el("div","card anim");emp.style.cssText="animation-delay:100ms;text-align:center;padding:22px;color:var(--dim);font-size:11px";
+    emp.textContent="Még nincs bejegyzés. Repülj egyet!";m.appendChild(emp);
+  } else {
+    // Summary stats row
+    const totalFlights=lb.length;
+    const totalMins=lb.reduce((s,e)=>s+(e.ftMin||0),0);
+    const avgFpm=Math.round(lb.reduce((s,e)=>s+Math.abs(e.fpm||0),0)/lb.length);
+    const sumCard=el("div","card anim");sumCard.style.cssText="animation-delay:90ms;display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-bottom:8px;padding:0;overflow:hidden";
+    [{v:totalFlights,l:"Repülések"},{v:_fmtFt(totalMins),l:"Össz. idő"},{v:avgFpm+" fpm",l:"Átlag VS"}].forEach((s,i)=>{
+      const d=el("div");d.style.cssText=`text-align:center;padding:12px 8px;${i<2?"border-right:1px solid var(--line)":""}`;
+      d.innerHTML=`<div style='font-size:18px;font-weight:800;color:var(--cy);font-variant-numeric:tabular-nums'>${s.v}</div><div style='font-size:9px;color:var(--dim);margin-top:2px'>${s.l}</div>`;
+      sumCard.appendChild(d);
+    });
+    m.appendChild(sumCard);
+
+    // Flight list
+    lb.slice(0,30).forEach((e,i)=>{
+      const [ql,qc]=_qLabel(e.fpm);
+      const row=el("div","card anim");row.style.cssText=`animation-delay:${100+i*25}ms;padding:10px 14px;margin-bottom:5px`;
+      const top=el("div","flex aic jb");
+      const route=el("div");
+      route.innerHTML=`<span style='font-weight:700;font-size:13px'>${e.dep||"?"} → ${e.arr||"?"}</span>
+        <span style='font-size:10px;color:var(--dim);margin-left:8px'>${e.aircraft?e.aircraft.replace(/\(.*\)/g,"").trim().substring(0,28):""}</span>`;
+      const badge=el("div");badge.style.cssText=`font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:${qc}18;border:1px solid ${qc}30;color:${qc}`;badge.textContent=ql;
+      top.appendChild(route);top.appendChild(badge);row.appendChild(top);
+      const bot=el("div","flex gap12");bot.style.cssText="margin-top:6px;font-variant-numeric:tabular-nums";
+      [[`${e.fpm||0} fpm`,"var(--dim)"],[`${e.gs||0} kt GS`,"var(--dim)"],[_fmtFt(e.ftMin),"var(--dim)"],[new Date(e.ts).toLocaleDateString(),"var(--dim)"]].forEach(([v,c])=>{
+        const s=el("span");s.style.cssText=`font-size:10px;color:${c}`;s.textContent=v;bot.appendChild(s);
+      });
+      row.appendChild(bot);m.appendChild(row);
+    });
+
+    // Clear button
+    const clrRow=el("div");clrRow.style.cssText="text-align:right;margin-top:4px";
+    const clrBtn=el("button","btn btn-dk");clrBtn.style.cssText="font-size:10px;padding:5px 12px";clrBtn.textContent="Napló törlése";
+    clrBtn.addEventListener("click",()=>{if(confirm("Törlöd az összes bejegyzést?")){{localStorage.removeItem("xdeck_logbook");renderTab();}}});
+    clrRow.appendChild(clrBtn);m.appendChild(clrRow);
   }
 }
 
