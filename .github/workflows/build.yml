@@ -61,10 +61,18 @@ jobs:
       - name: Build bridge EXE
         working-directory: bridge
         shell: pwsh
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           npm install --omit=optional
           npx --yes @vercel/ncc build src/index.js -o ncc_out --quiet
-          Set-Content -Path ncc_out/package.json -Value '{"name":"bridge","version":"1.0.0","type":"commonjs","bin":"index.js","pkg":{"assets":["*.node"]}}'
+          # Inject service account credentials so pkg bakes them into the exe
+          [System.IO.File]::WriteAllText(
+            (Join-Path (Get-Location) "ncc_out/serviceAccount.json"),
+            $env:FIREBASE_SA,
+            [System.Text.Encoding]::UTF8
+          )
+          Set-Content -Path ncc_out/package.json -Value '{"name":"bridge","version":"1.0.0","type":"commonjs","bin":"index.js","pkg":{"assets":["*.node","serviceAccount.json"]}}'
           Set-Location ncc_out
           npx --yes @yao-pkg/pkg . --target node18-win-x64 --output "$env:GITHUB_WORKSPACE/dist/bridge.exe"
       - name: Generate assets
