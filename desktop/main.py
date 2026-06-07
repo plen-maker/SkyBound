@@ -346,6 +346,15 @@ def update():
     except Exception as e:
         return jsonify({"error":str(e)})
 
+@app.route("/api/open-url")
+def open_url():
+    import webbrowser
+    url = request.args.get("url","")
+    if url.startswith("http"):
+        webbrowser.open(url)
+        return jsonify({"ok":True})
+    return jsonify({"error":"invalid url"}), 400
+
 def run_flask():
     app.run(port=47821, threaded=True, use_reloader=False)
 
