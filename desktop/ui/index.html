@@ -622,6 +622,7 @@ const TABS=[
   {id:"ctrl",l:"Ctrl",svg:"<rect x='2' y='6' width='20' height='12' rx='2'/><path d='M12 12h.01'/><path d='M17 12h.01'/><path d='M7 12h.01'/>"},
   {id:"bridge",l:"Bridge",svg:"<path d='M18 20V10'/><path d='M12 20V4'/><path d='M6 20v-6'/>"},
   {id:"landing",l:"Landing",svg:"<path d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.38 2 2 0 0 1 3.59 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.14 6.14l1.92-1.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z'/>"},
+  {id:"logbook",l:"Logbook",svg:"<path d='M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z'/><path d='M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z'/>"},
   {id:"settings",l:"Settings",svg:"<circle cx='12' cy='12' r='3'/><path d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z'/>"},
 ];
 
@@ -647,15 +648,13 @@ function navTo(tab){
 
 function renderTab(){
   const m=$("main");if(!m)return;
-  if(S.tab==="map"&&$("mapModeBar"))return;
-  // Remove map mode bar when leaving map tab
-  const oldModeBar=document.getElementById("mapModeBar");if(oldModeBar&&S.tab!=="map")oldModeBar.remove();
+  if(S.tab==="map"&&$("leafletMap"))return;
   if(S.tab!=="map")window._lfMap=null;
   m.innerHTML="";m.style.padding="20px 22px";m.style.overflow="auto";
   m.style.display="";m.style.alignItems="";m.style.justifyContent="";m.style.flexDirection="";m.style.minHeight="0";
   ({home:renderHome,map:renderMap,metar:renderMetar,ofp:renderOFP,vatsim:renderVatsim,
     charts:renderCharts,alerts:renderAlerts,ctrl:renderCtrl,bridge:renderBridge,
-    landing:renderLanding,settings:renderSettings})[S.tab]?.(m);
+    landing:renderLanding,logbook:renderLogbook,settings:renderSettings})[S.tab]?.(m);
 }
 
 // ── HOME ───────────────────────────────────────────────────────────
@@ -748,89 +747,69 @@ function renderHome(m){
 // ── MAP ────────────────────────────────────────────────────────────
 function renderMap(m){
   m.style.padding="0";m.style.overflow="hidden";
-  // Mode bar
-  const modeBar=el("div");modeBar.id="mapModeBar";
-  modeBar.style.cssText="position:absolute;top:58px;left:calc(var(--sidebar)+8px);z-index:999;display:flex;gap:5px;padding:5px";
-  const modes=[["satellite","Satellite"],["street","Street"],["vatsim","VATSIM Radar"]];
+  // Wrapper fills remaining height
+  const wrap=el("div");wrap.style.cssText="position:relative;width:100%;height:100%";
+  // Leaflet div
+  const lc=el("div");lc.id="leafletMap";lc.style.cssText="width:100%;height:100%;min-height:400px";
+  wrap.appendChild(lc);
+  // Mode toggle overlay (inside wrap, not body)
+  const bar=el("div");bar.id="mapModeBar";
+  bar.style.cssText="position:absolute;top:8px;right:8px;z-index:999;display:flex;gap:4px;padding:4px 6px;background:rgba(8,9,14,.82);border-radius:8px;border:1px solid var(--line);backdrop-filter:blur(10px)";
   const mapStyle=S.cfg.mapStyle||"satellite";
+  const modes=[["satellite","Satellite"],["street","Street"],["vatsim","VATSIM Radar"]];
   modes.forEach(([v,l])=>{
     const b=el("button","pill"+(mapStyle===v?" on":""));
-    b.textContent=l;b.style.cssText="font-size:10px;cursor:pointer;backdrop-filter:blur(10px);background:rgba(8,9,14,.75)";
+    b.textContent=l;b.style.cssText="font-size:10px;cursor:pointer";
     b.addEventListener("click",()=>{
+      if(v==="vatsim"){openBrowser("https://map.vatsim.net");return;}
       S.cfg.mapStyle=v;saveCfg();
-      // Update button states
-      modeBar.querySelectorAll("button").forEach((btn,i)=>btn.classList.toggle("on",modes[i][0]===v));
-      _applyMapMode(v);
+      bar.querySelectorAll("button").forEach((btn,i)=>btn.className="pill"+(modes[i][0]===v?" on":""));
+      if(window._lfMap){
+        window._lfMap.eachLayer(ly=>{if(ly instanceof L.TileLayer)window._lfMap.removeLayer(ly);});
+        _lfAddTiles(window._lfMap,v);
+      }
     });
-    modeBar.appendChild(b);
+    bar.appendChild(b);
   });
-  document.body.appendChild(modeBar);
-
-  // Leaflet container
-  const lc=el("div");lc.id="leafletMap";lc.style.cssText="width:100%;height:calc(100vh - 50px)";
-  // VATSIM iframe container
-  const vc=el("div");vc.id="vatsimMapCont";vc.style.cssText="width:100%;height:calc(100vh - 50px);display:none";
-  const vfr=el("iframe");vfr.id="vatsimMapIframe";vfr.style.cssText="width:100%;height:100%;border:none";
-  vfr.src="about:blank";vc.appendChild(vfr);
-  m.appendChild(lc);m.appendChild(vc);
-
-  if(mapStyle==="vatsim"){
-    lc.style.display="none";vc.style.display="block";
-    vfr.src="https://map.vatsim.net";
-  } else {
-    _initLeaflet(mapStyle);
-  }
-
+  wrap.appendChild(bar);
+  m.appendChild(wrap);
+  // Leaflet CSS + JS
   if(!document.getElementById("lf-css")){
     const l=document.createElement("link");l.id="lf-css";l.rel="stylesheet";
-    l.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(l);}
-  if(!window.L){const s=document.createElement("script");s.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";s.onload=()=>{if(S.cfg.mapStyle!=="vatsim")_initLeaflet(S.cfg.mapStyle||"satellite");};document.head.appendChild(s);}
-}
-
-function _applyMapMode(v){
-  const lc=$("leafletMap"),vc=$("vatsimMapCont"),vfr=$("vatsimMapIframe");
-  if(v==="vatsim"){
-    if(lc)lc.style.display="none";if(vc)vc.style.display="block";
-    if(vfr&&vfr.src==="about:blank")vfr.src="https://map.vatsim.net";
-  }else{
-    if(vc)vc.style.display="none";if(lc)lc.style.display="block";
-    if(window.L&&!window._lfMap)_initLeaflet(v);
-    else if(window._lfMap){
-      window._lfMap.eachLayer(l=>{if(l instanceof L.TileLayer)window._lfMap.removeLayer(l);});
-      if(v==="street"){
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19}).addTo(window._lfMap);
-      }else{
-        L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19}).addTo(window._lfMap);
-        L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,opacity:.6}).addTo(window._lfMap);
-      }
-    }
+    l.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(l);
   }
+  const initLf=()=>{
+    if(window._lfMap)return;
+    const fixes=(S.ofp?.fixes||[]).filter(f=>f.lat!=null);
+    const center=S.live?.lat?[S.live.lat,S.live.lon]:fixes.length?[fixes[Math.floor(fixes.length/2)].lat,fixes[Math.floor(fixes.length/2)].lon]:[47.4,19.26];
+    const map=L.map("leafletMap",{zoomControl:true,attributionControl:false}).setView(center,7);
+    window._lfMap=map;
+    _lfAddTiles(map,mapStyle==="vatsim"?"satellite":mapStyle);
+    if(S.cfg.mapRoute&&fixes.length>1){
+      L.polyline(fixes.map(f=>[f.lat,f.lon]),{color:"#5ec8ff",weight:2,dashArray:"7,5",opacity:.7}).addTo(map);
+      fixes.forEach((f,i)=>{
+        if(!(i===0||i===fixes.length-1||i%Math.max(1,Math.floor(fixes.length/8))===0))return;
+        L.circleMarker([f.lat,f.lon],{radius:i===0||i===fixes.length-1?6:3,
+          color:i===0?"#52e3b0":i===fixes.length-1?"#f06080":"#5ec8ff",
+          fillColor:i===0?"#52e3b0":i===fixes.length-1?"#f06080":"#1a4070",fillOpacity:1,weight:2}).bindTooltip(f.ident).addTo(map);
+      });
+    }
+    if(S.live?.lat){
+      const ic=L.divIcon({html:`<svg viewBox='0 0 24 24' width='20' height='20'><path d='M12 2 L16 17 L12 13 L8 17 Z' fill='white' stroke='#5ec8ff' stroke-width='1.5'/></svg>`,iconSize:[20,20],iconAnchor:[10,10],className:""});
+      L.marker([S.live.lat,S.live.lon],{icon:ic}).addTo(map);
+    }
+    // Trigger resize after DOM settles
+    setTimeout(()=>map.invalidateSize(),100);
+  };
+  if(window.L)initLf();
+  else{const s=document.createElement("script");s.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";s.onload=initLf;document.head.appendChild(s);}
 }
-
-function _initLeaflet(style){
-  if(window._lfMap)return;
-  const fixes=(S.ofp?.fixes||[]).filter(f=>f.lat!=null);
-  const center=S.live&&S.live.lat?[S.live.lat,S.live.lon]:fixes.length?[fixes[Math.floor(fixes.length/2)].lat,fixes[Math.floor(fixes.length/2)].lon]:[47.4,19.26];
-  const map=L.map("leafletMap",{zoomControl:true,attributionControl:false}).setView(center,7);
-  window._lfMap=map;
+function _lfAddTiles(map,style){
   if(style==="street"){
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19}).addTo(map);
   }else{
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19}).addTo(map);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,opacity:.6}).addTo(map);
-  }
-  if(S.cfg.mapRoute&&fixes.length>1){
-    L.polyline(fixes.map(f=>[f.lat,f.lon]),{color:"#5ec8ff",weight:2,dashArray:"7,5",opacity:.7}).addTo(map);
-    fixes.forEach((f,i)=>{
-      if(!(i===0||i===fixes.length-1||i%Math.max(1,Math.floor(fixes.length/8))===0))return;
-      L.circleMarker([f.lat,f.lon],{radius:i===0||i===fixes.length-1?6:3,
-        color:i===0?"#52e3b0":i===fixes.length-1?"#f06080":"#5ec8ff",
-        fillColor:i===0?"#52e3b0":i===fixes.length-1?"#f06080":"#1a4070",fillOpacity:1,weight:2}).bindTooltip(f.ident).addTo(map);
-    });
-  }
-  if(S.live&&S.live.lat){
-    const ic=L.divIcon({html:`<svg viewBox='0 0 24 24' width='20' height='20'><path d='M12 2 L16 17 L12 13 L8 17 Z' fill='white' stroke='#5ec8ff' stroke-width='1.5'/></svg>`,iconSize:[20,20],iconAnchor:[10,10],className:""});
-    L.marker([S.live.lat,S.live.lon],{icon:ic}).addTo(map);
   }
 }
 
@@ -1744,49 +1723,53 @@ function renderLanding(m){
     m.appendChild(loc);
   }
 
-  // ── Logbook ──────────────────────────────────────────────────────
+}
+
+// ── LOGBOOK (Volanta-stílusú napló) ───────────────────────────────
+function renderLogbook(m){
   const lb=_logbookGet();
-  const slLb=el("div","sl anim");slLb.style.cssText="margin-top:18px;animation-delay:80ms";slLb.textContent="Repülési napló";m.appendChild(slLb);
+  const sl=el("div","sl anim");sl.textContent="Repülési napló";m.appendChild(sl);
 
   if(!lb.length){
-    const emp=el("div","card anim");emp.style.cssText="animation-delay:100ms;text-align:center;padding:22px;color:var(--dim);font-size:11px";
-    emp.textContent="Még nincs bejegyzés. Repülj egyet!";m.appendChild(emp);
-  } else {
-    // Summary stats row
-    const totalFlights=lb.length;
-    const totalMins=lb.reduce((s,e)=>s+(e.ftMin||0),0);
-    const avgFpm=Math.round(lb.reduce((s,e)=>s+Math.abs(e.fpm||0),0)/lb.length);
-    const sumCard=el("div","card anim");sumCard.style.cssText="animation-delay:90ms;display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-bottom:8px;padding:0;overflow:hidden";
-    [{v:totalFlights,l:"Repülések"},{v:_fmtFt(totalMins),l:"Össz. idő"},{v:avgFpm+" fpm",l:"Átlag VS"}].forEach((s,i)=>{
-      const d=el("div");d.style.cssText=`text-align:center;padding:12px 8px;${i<2?"border-right:1px solid var(--line)":""}`;
-      d.innerHTML=`<div style='font-size:18px;font-weight:800;color:var(--cy);font-variant-numeric:tabular-nums'>${s.v}</div><div style='font-size:9px;color:var(--dim);margin-top:2px'>${s.l}</div>`;
-      sumCard.appendChild(d);
-    });
-    m.appendChild(sumCard);
-
-    // Flight list
-    lb.slice(0,30).forEach((e,i)=>{
-      const [ql,qc]=_qLabel(e.fpm);
-      const row=el("div","card anim");row.style.cssText=`animation-delay:${100+i*25}ms;padding:10px 14px;margin-bottom:5px`;
-      const top=el("div","flex aic jb");
-      const route=el("div");
-      route.innerHTML=`<span style='font-weight:700;font-size:13px'>${e.dep||"?"} → ${e.arr||"?"}</span>
-        <span style='font-size:10px;color:var(--dim);margin-left:8px'>${e.aircraft?e.aircraft.replace(/\(.*\)/g,"").trim().substring(0,28):""}</span>`;
-      const badge=el("div");badge.style.cssText=`font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:${qc}18;border:1px solid ${qc}30;color:${qc}`;badge.textContent=ql;
-      top.appendChild(route);top.appendChild(badge);row.appendChild(top);
-      const bot=el("div","flex gap12");bot.style.cssText="margin-top:6px;font-variant-numeric:tabular-nums";
-      [[`${e.fpm||0} fpm`,"var(--dim)"],[`${e.gs||0} kt GS`,"var(--dim)"],[_fmtFt(e.ftMin),"var(--dim)"],[new Date(e.ts).toLocaleDateString(),"var(--dim)"]].forEach(([v,c])=>{
-        const s=el("span");s.style.cssText=`font-size:10px;color:${c}`;s.textContent=v;bot.appendChild(s);
-      });
-      row.appendChild(bot);m.appendChild(row);
-    });
-
-    // Clear button
-    const clrRow=el("div");clrRow.style.cssText="text-align:right;margin-top:4px";
-    const clrBtn=el("button","btn btn-dk");clrBtn.style.cssText="font-size:10px;padding:5px 12px";clrBtn.textContent="Napló törlése";
-    clrBtn.addEventListener("click",()=>{if(confirm("Törlöd az összes bejegyzést?")){{localStorage.removeItem("xdeck_logbook");renderTab();}}});
-    clrRow.appendChild(clrBtn);m.appendChild(clrRow);
+    const emp=el("div","card anim");emp.style.cssText="text-align:center;padding:44px 20px";
+    emp.innerHTML=`<div style='font-size:38px;margin-bottom:12px;opacity:.2'>📖</div>
+      <div style='font-size:13px;color:var(--dim)'>Még nincs bejegyzés.</div>
+      <div style='font-size:11px;color:var(--dim);margin-top:6px'>Landolj egyet a bridge segítségével — automatikusan bekerül.</div>`;
+    m.appendChild(emp);return;
   }
+
+  // Summary stats
+  const totalFlights=lb.length;
+  const totalMins=lb.reduce((s,e)=>s+(e.ftMin||0),0);
+  const avgFpm=Math.round(lb.reduce((s,e)=>s+Math.abs(e.fpm||0),0)/lb.length);
+  const sumCard=el("div","card anim");sumCard.style.cssText="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-bottom:8px;padding:0;overflow:hidden;animation-delay:20ms";
+  [{v:totalFlights,l:"Repülések"},{v:_fmtFt(totalMins),l:"Össz. idő"},{v:avgFpm+" fpm",l:"Átlag VS"}].forEach((s,i)=>{
+    const d=el("div");d.style.cssText=`text-align:center;padding:14px 8px;${i<2?"border-right:1px solid var(--line)":""}`;
+    d.innerHTML=`<div style='font-size:20px;font-weight:800;color:var(--cy);font-variant-numeric:tabular-nums'>${s.v}</div><div style='font-size:9px;color:var(--dim);margin-top:3px'>${s.l}</div>`;
+    sumCard.appendChild(d);
+  });
+  m.appendChild(sumCard);
+
+  lb.slice(0,50).forEach((e,i)=>{
+    const [ql,qc]=_qLabel(e.fpm);
+    const row=el("div","card anim");row.style.cssText=`animation-delay:${40+i*20}ms;padding:11px 14px;margin-bottom:5px`;
+    const top=el("div","flex aic jb");
+    const route=el("div");
+    const ac=(e.aircraft||"").replace(/\(.*\)/g,"").trim().substring(0,26);
+    route.innerHTML=`<span style='font-weight:700;font-size:14px'>${e.dep||"???"} → ${e.arr||"???"}</span>${ac?`<span style='font-size:10px;color:var(--dim);margin-left:8px'>${ac}</span>`:""}`;
+    const badge=el("div");badge.style.cssText=`font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;background:${qc}18;border:1px solid ${qc}30;color:${qc}`;badge.textContent=ql;
+    top.appendChild(route);top.appendChild(badge);row.appendChild(top);
+    const bot=el("div","flex gap12");bot.style.cssText="margin-top:7px";
+    [[`${e.fpm||0} fpm`],[`${e.gs||0} kt`],[_fmtFt(e.ftMin)],[new Date(e.ts).toLocaleDateString()]].forEach(([v])=>{
+      const s=el("span");s.style.cssText="font-size:10px;color:var(--dim);font-variant-numeric:tabular-nums";s.textContent=v;bot.appendChild(s);
+    });
+    row.appendChild(bot);m.appendChild(row);
+  });
+
+  const clrRow=el("div");clrRow.style.cssText="text-align:right;margin-top:6px";
+  const clrBtn=el("button","btn btn-dk");clrBtn.style.cssText="font-size:10px;padding:5px 12px";clrBtn.textContent="Napló törlése";
+  clrBtn.addEventListener("click",()=>{if(confirm("Törlöd az összes bejegyzést?")){localStorage.removeItem("xdeck_logbook");renderTab();}});
+  clrRow.appendChild(clrBtn);m.appendChild(clrRow);
 }
 
 // ── SETTINGS ──────────────────────────────────────────────────────
