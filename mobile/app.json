@@ -2,8 +2,8 @@
   "expo": {
     "name": "Xdeck EFB",
     "slug": "xdeck-efb",
-    "version": "0.1.0",
-    "orientation": "portrait",
+    "version": "2.0.0",
+    "orientation.": "portrait",
     "backgroundColor": "#08090e",
     "icon": "./assets/icon.png",
     "splash": {
