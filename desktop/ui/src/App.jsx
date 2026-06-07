@@ -823,7 +823,7 @@ function AppShell({ user }) {
           {tab==="vatsim"      && <VatsimTab/>}
           {tab==="charts"      && <ChartsTab ofp={ofp}/>}
           {tab==="alerts"      && <AlertsTab triggers={triggers} onAdd={addTr} onDel={delTr} onToggle={togTr}/>}
-          {tab==="controllers" && <ControllersTab gamepads={gamepads} axisMap={axisMap} onSave={saveAxis}/>}
+          {tab==="controllers" && <ControllersTab gamepads={gamepads} axisMap={axisMap} onSave={saveAxis} live={live}/>}
           {tab==="settings"    && <SettingsTab settings={settings} save={save} onLoadOFP={()=>loadOFP()}/>}
         </div>
       </div>
@@ -1555,70 +1555,410 @@ function AlertsTab({triggers,onAdd,onDel,onToggle}) {
 }
 
 
-/* ══ CONTROLLERS TAB ═════════════════════════════════════════════ */
-function ControllersTab({gamepads,axisMap,onSave}) {
-  const LABELS=["Roll","Pitch","Throttle L","Throttle R","Rudder","Tiller","Flaps","Brakes","View H","View V"];
-  if (!gamepads.length) return (
-    <div style={{ paddingTop:60, display:"flex", flexDirection:"column",
-      alignItems:"center", gap:12, color:"var(--dim)" }}>
-      <Gamepad2 size={32} color="#1e3a5f"/>
-      <div style={{ fontSize:14 }}>Nem található gamepad / HOTAS.</div>
-      <div style={{ fontSize:12 }}>Csatlakoztasd az eszközt és újraindítod az appot.</div>
+/* ══ CONTROL CENTER — database ══════════════════════════════════ */
+const CC_DB = [
+  {
+    id:"fenix_a32x", name:"Fenix A320 Family", patterns:["fenix"],
+    color:"var(--cy)",
+    sidestick:{ ctrlKey:"tca_sidestick_airbus",
+      axes:[
+        {name:"Aileron (Roll)",    sens:0,  dz:0, react:100},
+        {name:"Elevator (Pitch)", sens:0,  dz:0, react:100},
+        {name:"Rudder",           sens:0,  dz:0, react:100},
+      ],
+      note:"Lineáris (0%) érzékenység, 100% reaktivitás — Fenix FBW veszi át.",
+      src:"FenixSim Support Hub"
+    },
+    throttle:{ ctrlKey:"tca_quadrant_airbus",
+      axes:[
+        {name:"Throttle 1",  sens:0, dz:2, react:100},
+        {name:"Throttle 2",  sens:0, dz:2, react:100},
+        {name:"Spoilers",    sens:0, dz:0, react:100},
+        {name:"Flaps",       sens:0, dz:0, react:100},
+      ],
+      note:"2% null zone a throttle tengelyeken TCA Quadrant-hoz.",
+      src:"FenixSim Support Hub"
+    },
+  },
+  {
+    id:"pmdg_737", name:"PMDG 737", patterns:["pmdg 737","boeing 737","b737"],
+    color:"var(--am)",
+    yoke:{ ctrlKey:"tca_yoke_boeing",
+      axes:[
+        {name:"Aileron (Roll)",    sens:-30, dz:5, react:100},
+        {name:"Elevator (Pitch)", sens:-30, dz:5, react:100},
+        {name:"Rudder",           sens:0,   dz:5, react:100},
+      ],
+      note:"−30% érzékenység a felfúgatott vezérlőfelületek szimulálásához.",
+      src:"PMDG forum + community"
+    },
+    throttle:{ ctrlKey:"tca_quadrant_boeing",
+      axes:[
+        {name:"Throttle 1",  sens:0, dz:3, react:100},
+        {name:"Throttle 2",  sens:0, dz:3, react:100},
+        {name:"Spoilers",    sens:0, dz:0, react:100},
+        {name:"Flaps",       sens:0, dz:0, react:100},
+      ],
+      note:"3% null zone a throttle tengelyeken.",
+      src:"Community"
+    },
+  },
+  {
+    id:"pmdg_777", name:"PMDG 777", patterns:["pmdg 777","boeing 777","b777"],
+    color:"var(--gn)",
+    yoke:{ ctrlKey:"tca_yoke_boeing",
+      axes:[
+        {name:"Aileron (Roll)",    sens:-30, dz:5, react:80},
+        {name:"Elevator (Pitch)", sens:-30, dz:5, react:80},
+        {name:"Rudder",           sens:0,   dz:5, react:100},
+      ],
+      note:"−30% érzékenység, 80% reaktivitás a 777 nehéz vezérlő érzet szimulálásához.",
+      src:"PMDG forum community"
+    },
+    throttle:{ ctrlKey:"tca_quadrant_boeing",
+      axes:[
+        {name:"Throttle 1",  sens:0, dz:3, react:100},
+        {name:"Throttle 2",  sens:0, dz:3, react:100},
+        {name:"Spoilers",    sens:0, dz:0, react:100},
+      ],
+      note:"3% null zone.",
+      src:"Community"
+    },
+  },
+  {
+    id:"pmdg_md11", name:"PMDG MD-11", patterns:["md-11","md11"],
+    color:"var(--pu)",
+    yoke:{ ctrlKey:"tca_yoke_boeing",
+      axes:[
+        {name:"Aileron (Roll)",    sens:-20, dz:5, react:90},
+        {name:"Elevator (Pitch)", sens:-20, dz:5, react:90},
+        {name:"Rudder",           sens:0,   dz:5, react:100},
+      ],
+      note:"−20% érzékenység, 90% reaktivitás az MD-11 karakterisztikájához.",
+      src:"Community"
+    },
+    throttle:{ ctrlKey:"tca_quadrant_boeing",
+      axes:[
+        {name:"Throttle 1",       sens:0, dz:3, react:100},
+        {name:"Throttle 2",       sens:0, dz:3, react:100},
+        {name:"Throttle 3 (Cnt)", sens:0, dz:3, react:100},
+        {name:"Spoilers",         sens:0, dz:0, react:100},
+      ],
+      note:"3 throttle tengely a háromhajtóműves konfigurációhoz.",
+      src:"Community"
+    },
+  },
+  {
+    id:"fslabs_a321", name:"FSLabs A321 NEO", patterns:["fslabs","fs labs","a321 neo","a321neo"],
+    color:"var(--rd)",
+    sidestick:{ ctrlKey:"tca_sidestick_airbus",
+      axes:[
+        {name:"Aileron (Roll)",    sens:0, dz:0, react:100},
+        {name:"Elevator (Pitch)", sens:0, dz:0, react:100},
+        {name:"Rudder",           sens:0, dz:0, react:100},
+      ],
+      note:"Lineáris érzékenység — FSLabs FBW logika kezeli a vezérlést.",
+      src:"FSLabs community"
+    },
+    throttle:{ ctrlKey:"tca_quadrant_airbus",
+      axes:[
+        {name:"Throttle 1",  sens:0, dz:2, react:100},
+        {name:"Throttle 2",  sens:0, dz:2, react:100},
+        {name:"Spoilers",    sens:0, dz:0, react:100},
+        {name:"Flaps",       sens:0, dz:0, react:100},
+      ],
+      note:"2% null zone a throttle tengelyeken.",
+      src:"Community"
+    },
+  },
+];
+
+const CC_CONTROLLERS = {
+  tca_sidestick_airbus: { name:"TCA Sidestick Airbus", img:"/controllers/tca-sidestick-airbus.webp",
+    patterns:["airbus edition","tca sidestick","tca-sidestick airbus"] },
+  tca_quadrant_airbus:  { name:"TCA Quadrant Airbus",  img:"/controllers/tca-quadrant-airbus.webp",
+    patterns:["tca quadrant airbus","quadrant airbus","tca-quadrant airbus"] },
+  tca_yoke_boeing:      { name:"TCA Yoke Boeing",      img:"/controllers/tca-yoke-boeing.webp",
+    patterns:["boeing yoke","tca yoke","yoke boeing"] },
+  tca_quadrant_boeing:  { name:"TCA Quadrant Boeing",  img:"/controllers/tca-quadrant-boeing.jpg",
+    patterns:["boeing throttle","quadrant boeing","tca quadrant boeing"] },
+};
+
+function detectAircraft(title) {
+  if (!title) return null;
+  const t = title.toLowerCase();
+  return CC_DB.find(a => a.patterns.some(p => t.includes(p))) || null;
+}
+
+function matchedPresets(aircraft, gamepads) {
+  if (!aircraft) return [];
+  const results = [];
+  // Which preset roles does this aircraft have?
+  const roles = [];
+  if (aircraft.sidestick) roles.push({ role:"sidestick", preset:aircraft.sidestick, ctrlKey:aircraft.sidestick.ctrlKey });
+  if (aircraft.yoke)      roles.push({ role:"yoke",      preset:aircraft.yoke,      ctrlKey:aircraft.yoke.ctrlKey });
+  if (aircraft.throttle)  roles.push({ role:"throttle",  preset:aircraft.throttle,  ctrlKey:aircraft.throttle.ctrlKey });
+
+  for (const { role, preset, ctrlKey } of roles) {
+    const ctrl = CC_CONTROLLERS[ctrlKey];
+    // Check if user has this controller connected
+    const gp = gamepads.find(g => {
+      const id = g.id.toLowerCase();
+      return ctrl.patterns.some(p => id.includes(p));
+    });
+    results.push({ role, preset, ctrlKey, ctrl, connected: !!gp });
+  }
+  return results;
+}
+
+function AxisRow({ ax }) {
+  const sensColor = ax.sens < 0 ? "var(--am)" : ax.sens > 0 ? "var(--cy)" : "var(--dim)";
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 0",
+      borderBottom:"1px solid rgba(28,45,66,.5)" }}>
+      <div style={{ width:148, fontSize:11, color:"var(--tx)", flexShrink:0 }}>{ax.name}</div>
+      <div style={{ flex:1, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
+        {[
+          ["Sensitivity", `${ax.sens >= 0 ? "+" : ""}${ax.sens}%`, sensColor],
+          ["Deadzone",    `${ax.dz}%`,   "var(--gn)"],
+          ["Reactivity",  `${ax.react}%`, "var(--pu)"],
+        ].map(([lbl, val, col]) => (
+          <div key={lbl} style={{ background:"var(--p2)", borderRadius:7,
+            padding:"4px 8px", border:"1px solid var(--line)" }}>
+            <div style={{ fontSize:9, color:"var(--dim)", letterSpacing:.8 }}>{lbl.toUpperCase()}</div>
+            <div className="mono" style={{ fontSize:13, fontWeight:600, color:col, marginTop:1 }}>{val}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
+}
+
+/* ══ CONTROLLERS TAB (Control Center) ═══════════════════════════ */
+function ControllersTab({ gamepads, axisMap, onSave, live }) {
+  const [ccTab,     setCcTab]     = useState("official");
+  const [applying,  setApplying]  = useState(null); // ctrlKey being applied
+  const [applyMsg,  setApplyMsg]  = useState(null);
+  const [customSel, setCustomSel] = useState(null);
+
+  const aircraft = detectAircraft(live?.aircraftTitle);
+  const presets  = matchedPresets(aircraft, gamepads);
+
+  const handleApply = async (ctrlKey, preset) => {
+    setApplying(ctrlKey);
+    setApplyMsg(null);
+    try {
+      const r = await fetch("/api/control-center/apply", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+          aircraft: aircraft?.name || "",
+          controller: CC_CONTROLLERS[ctrlKey]?.name || ctrlKey,
+          axes: preset.axes,
+        }),
+      });
+      const d = await r.json();
+      setApplyMsg(d.ok
+        ? { type:"ok",  text:`✓ Profil mentve: ${d.path}` }
+        : { type:"err", text: d.error || "Hiba" });
+    } catch(e) { setApplyMsg({ type:"err", text: e.message }); }
+    setApplying(null);
+  };
+
+  const AXIS_LABELS = ["Roll","Pitch","Throttle L","Throttle R","Rudder","Tiller","Flaps","Brakes","View H","View V"];
+
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-      <SL>Controller Axis Mapping</SL>
-      {gamepads.map((gp,gi)=>(
-        <div key={gp.id} className={`card anim-up`}
-          style={{ padding:0, overflow:"hidden", animationDelay:`${gi*60}ms` }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10,
-            padding:"12px 16px", background:"var(--p2)", borderBottom:"1px solid var(--line)" }}>
-            <Gamepad2 size={16} color="var(--cy)"/>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontWeight:600, fontSize:13 }}>Controller {gi+1}</div>
-              <div style={{ fontSize:10, color:"var(--dim)", overflow:"hidden",
-                textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{gp.id}</div>
+    <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+      {/* Header */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div>
+          <SL>Control Center</SL>
+          {live?.aircraftTitle
+            ? <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:3 }}>
+                <div style={{ width:6, height:6, borderRadius:"50%",
+                  background: aircraft ? "var(--gn)" : "var(--am)" }}/>
+                <span style={{ fontSize:11, color: aircraft ? "var(--gn)" : "var(--am)" }}>
+                  {aircraft ? aircraft.name : "Ismeretlen repülő"}
+                </span>
+                <span style={{ fontSize:10, color:"var(--dim)" }}>— {live.aircraftTitle}</span>
+              </div>
+            : <div style={{ fontSize:11, color:"var(--dim)", marginTop:3 }}>Várakozás a bridge adataira...</div>
+          }
+        </div>
+        <div style={{ display:"flex", gap:6 }}>
+          {[["official","Official"],["custom","Custom"]].map(([v,l]) => (
+            <button key={v} onClick={() => setCcTab(v)}
+              style={{ padding:"5px 14px", borderRadius:99, fontSize:11, fontWeight:600,
+                cursor:"pointer", transition:"all .15s", border:"1px solid",
+                background: ccTab===v ? "var(--cy)" : "transparent",
+                color:       ccTab===v ? "#070b12"   : "var(--dim)",
+                borderColor: ccTab===v ? "var(--cy)"  : "var(--line)" }}>
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Official tab ── */}
+      {ccTab === "official" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {!aircraft && (
+            <div className="card" style={{ textAlign:"center", padding:"36px 20px", color:"var(--dim)" }}>
+              <Gamepad2 size={28} color="var(--line)" style={{ marginBottom:10 }}/>
+              <div style={{ fontSize:13 }}>
+                {live?.aircraftTitle
+                  ? `Nincs preset ehhez: "${live.aircraftTitle}"`
+                  : "Indítsd el a bridge-et és szállj be egy repülőbe."}
+              </div>
+              <div style={{ fontSize:11, marginTop:6 }}>
+                Támogatott: Fenix A320 · PMDG 737 · PMDG 777 · PMDG MD-11 · FSLabs A321
+              </div>
             </div>
-            <span className="badge" style={{ background:"rgba(82,227,176,.1)",
-              border:"1px solid rgba(82,227,176,.2)", color:"var(--gn)" }}>Csatlakozva</span>
-          </div>
-          {gp.axes.map(ax=>{
-            const key=`${gp.id}:${ax.index}`, cur=axisMap[key]||"";
-            const pct=Math.round((ax.value+1)/2*100);
-            return (
-              <div key={ax.index} style={{ display:"flex", alignItems:"center", gap:10,
-                padding:"8px 16px", borderBottom:"1px solid rgba(28,45,66,.5)" }}>
-                <div className="mono" style={{ width:20, fontSize:10, color:"var(--dim)", flexShrink:0 }}>
-                  A{ax.index}
+          )}
+
+          {presets.map(({ role, preset, ctrlKey, ctrl, connected }) => (
+            <div key={ctrlKey} className="card anim-up" style={{ padding:0, overflow:"hidden" }}>
+              {/* Card header */}
+              <div style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 16px",
+                background:"var(--p2)", borderBottom:"1px solid var(--line)" }}>
+                {ctrl.img && (
+                  <img src={ctrl.img} alt={ctrl.name}
+                    style={{ width:46, height:46, objectFit:"contain", borderRadius:8,
+                      background:"#fff", padding:3, flexShrink:0 }}/>
+                )}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:600, fontSize:13, display:"flex", alignItems:"center", gap:7 }}>
+                    {ctrl.name}
+                    <span style={{ fontSize:9, padding:"2px 7px", borderRadius:99,
+                      background: connected ? "rgba(82,227,176,.1)" : "rgba(255,180,84,.08)",
+                      border:`1px solid ${connected ? "rgba(82,227,176,.2)" : "rgba(255,180,84,.2)"}`,
+                      color: connected ? "var(--gn)" : "var(--am)" }}>
+                      {connected ? "Csatlakozva" : "Nincs csatlakoztatva"}
+                    </span>
+                  </div>
+                  <div style={{ fontSize:10, color:"var(--dim)", marginTop:2 }}>
+                    {aircraft?.name} · {preset.src}
+                  </div>
                 </div>
-                <div style={{ width:88, height:4, background:"var(--p2)",
-                  borderRadius:99, overflow:"hidden", flexShrink:0 }}>
-                  <div style={{ width:`${pct}%`, height:"100%",
-                    background:"linear-gradient(90deg, var(--cy), var(--pu))",
-                    transition:"width .08s ease", borderRadius:99 }}/>
-                </div>
-                <div className="mono" style={{ width:36, fontSize:10, color:"var(--cy)", flexShrink:0 }}>
-                  {ax.value.toFixed(2)}
-                </div>
-                <select value={cur} onChange={e=>onSave(gp.id,ax.index,e.target.value)}
-                  style={{ flex:1, background:"var(--p2)", border:"1px solid var(--line)",
-                    color:cur?"var(--tx)":"var(--dim)", fontSize:11, borderRadius:7, padding:"4px 8px",
-                    transition:"border-color .15s" }}>
-                  <option value="">— nincs —</option>
-                  {LABELS.map(l=><option key={l} value={l}>{l}</option>)}
-                </select>
-                {cur&&(
-                  <span style={{ display:"flex", alignItems:"center", gap:3,
-                    fontSize:10, color:"var(--cy)", flexShrink:0 }}>
-                    <Check size={10}/>{cur}
-                  </span>
+                <button onClick={() => handleApply(ctrlKey, preset)}
+                  disabled={!!applying}
+                  style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px",
+                    borderRadius:8, border:"1px solid var(--cy)", background:"rgba(94,200,255,.08)",
+                    color:"var(--cy)", fontSize:12, fontWeight:600, cursor:applying?"default":"pointer",
+                    opacity: applying ? .5 : 1, transition:"all .15s" }}>
+                  {applying === ctrlKey
+                    ? <Loader2 size={12} className="spin"/>
+                    : <Check size={12}/>}
+                  Apply
+                </button>
+              </div>
+              {/* Axes */}
+              <div style={{ padding:"4px 16px 12px" }}>
+                {preset.axes.map((ax, i) => <AxisRow key={i} ax={ax}/>)}
+                {preset.note && (
+                  <div style={{ fontSize:10, color:"var(--dim)", marginTop:8,
+                    padding:"6px 10px", background:"var(--bg)", borderRadius:7,
+                    border:"1px solid var(--line)", lineHeight:1.6 }}>
+                    💡 {preset.note}
+                  </div>
                 )}
               </div>
-            );
-          })}
+            </div>
+          ))}
+
+          {applyMsg && (
+            <div style={{ padding:"8px 12px", borderRadius:9, fontSize:12,
+              background: applyMsg.type==="ok" ? "rgba(82,227,176,.07)" : "rgba(240,96,128,.07)",
+              border:`1px solid ${applyMsg.type==="ok" ? "rgba(82,227,176,.2)" : "rgba(240,96,128,.2)"}`,
+              color: applyMsg.type==="ok" ? "var(--gn)" : "var(--rd)" }}>
+              {applyMsg.text}
+            </div>
+          )}
         </div>
-      ))}
+      )}
+
+      {/* ── Custom tab ── */}
+      {ccTab === "custom" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {/* Controller selector */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(2, 1fr)", gap:8 }}>
+            {Object.entries(CC_CONTROLLERS).map(([key, ctrl]) => (
+              <button key={key} onClick={() => setCustomSel(customSel===key ? null : key)}
+                style={{ padding:10, borderRadius:12, border:"1px solid",
+                  borderColor: customSel===key ? "var(--cy)" : "var(--line)",
+                  background:  customSel===key ? "rgba(94,200,255,.06)" : "var(--p1)",
+                  cursor:"pointer", textAlign:"center", transition:"all .15s" }}>
+                <img src={ctrl.img} alt={ctrl.name}
+                  style={{ width:"100%", height:66, objectFit:"contain", marginBottom:6 }}/>
+                <div style={{ fontSize:10, fontWeight:600, color:"var(--tx)" }}>{ctrl.name}</div>
+              </button>
+            ))}
+          </div>
+
+          {customSel && (
+            <div className="card" style={{ textAlign:"center", padding:"28px 20px", color:"var(--dim)" }}>
+              <div style={{ fontSize:13, marginBottom:6 }}>🚧 Interaktív gomb konfiguráció</div>
+              <div style={{ fontSize:11 }}>Hamarosan — fázis 3</div>
+            </div>
+          )}
+
+          {/* Axis mapping (existing) */}
+          {gamepads.length === 0 && (
+            <div style={{ paddingTop:20, display:"flex", flexDirection:"column",
+              alignItems:"center", gap:10, color:"var(--dim)" }}>
+              <Gamepad2 size={28} color="#1e3a5f"/>
+              <div style={{ fontSize:13 }}>Nem található gamepad / HOTAS.</div>
+            </div>
+          )}
+          {gamepads.map((gp, gi) => (
+            <div key={gp.id} className="card anim-up"
+              style={{ padding:0, overflow:"hidden", animationDelay:`${gi*60}ms` }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10,
+                padding:"12px 16px", background:"var(--p2)", borderBottom:"1px solid var(--line)" }}>
+                <Gamepad2 size={16} color="var(--cy)"/>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:600, fontSize:13 }}>Controller {gi+1}</div>
+                  <div style={{ fontSize:10, color:"var(--dim)", overflow:"hidden",
+                    textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{gp.id}</div>
+                </div>
+                <span className="badge" style={{ background:"rgba(82,227,176,.1)",
+                  border:"1px solid rgba(82,227,176,.2)", color:"var(--gn)" }}>Csatlakozva</span>
+              </div>
+              {gp.axes.map(ax => {
+                const key = `${gp.id}:${ax.index}`, cur = axisMap[key] || "";
+                const pct = Math.round((ax.value + 1) / 2 * 100);
+                return (
+                  <div key={ax.index} style={{ display:"flex", alignItems:"center", gap:10,
+                    padding:"8px 16px", borderBottom:"1px solid rgba(28,45,66,.5)" }}>
+                    <div className="mono" style={{ width:20, fontSize:10, color:"var(--dim)", flexShrink:0 }}>
+                      A{ax.index}
+                    </div>
+                    <div style={{ width:80, height:4, background:"var(--p2)",
+                      borderRadius:99, overflow:"hidden", flexShrink:0 }}>
+                      <div style={{ width:`${pct}%`, height:"100%",
+                        background:"linear-gradient(90deg, var(--cy), var(--pu))",
+                        transition:"width .08s ease", borderRadius:99 }}/>
+                    </div>
+                    <div className="mono" style={{ width:36, fontSize:10, color:"var(--cy)", flexShrink:0 }}>
+                      {ax.value.toFixed(2)}
+                    </div>
+                    <select value={cur} onChange={e => onSave(gp.id, ax.index, e.target.value)}
+                      style={{ flex:1, background:"var(--p2)", border:"1px solid var(--line)",
+                        color:cur?"var(--tx)":"var(--dim)", fontSize:11, borderRadius:7, padding:"4px 8px" }}>
+                      <option value="">— nincs —</option>
+                      {AXIS_LABELS.map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                    {cur && <span style={{ display:"flex", alignItems:"center", gap:3,
+                        fontSize:10, color:"var(--cy)", flexShrink:0 }}>
+                      <Check size={10}/>{cur}
+                    </span>}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

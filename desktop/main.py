@@ -131,6 +131,57 @@ def metar():
         return jsonify({"error":str(e)})
 
 
+@app.route("/api/control-center/apply", methods=["POST"])
+def cc_apply():
+    import pathlib, datetime
+    d = request.json or {}
+    aircraft   = d.get("aircraft", "Unknown")
+    controller = d.get("controller", "Unknown")
+    axes       = d.get("axes", [])
+
+    out_dir = pathlib.Path.home() / "Documents" / "Xdeck EFB" / "Control Profiles"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_ac   = "".join(c if c.isalnum() or c in " _-" else "" for c in aircraft).strip().replace(" ","_")
+    safe_ctrl = "".join(c if c.isalnum() or c in " _-" else "" for c in controller).strip().replace(" ","_")
+    filename  = f"Xdeck_{safe_ac}_x_{safe_ctrl}.txt"
+    out_path  = out_dir / filename
+
+    lines = [
+        "Xdeck EFB — Control Center Reference Guide",
+        f"Generated : {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        "",
+        f"Aircraft   : {aircraft}",
+        f"Controller : {controller}",
+        "",
+        f"{'Axis':<24} {'Sensitivity':>13} {'Deadzone':>10} {'Reactivity':>11}",
+        "-" * 62,
+    ]
+    for ax in axes:
+        name  = ax.get("name","")
+        sens  = ax.get("sens", ax.get("sensitivity", 0))
+        dz    = ax.get("dz",   ax.get("deadzone", 0))
+        react = ax.get("react", ax.get("reactivity", 100))
+        lines.append(f"{name:<24} {f'{sens:+}%':>13} {f'{dz}%':>10} {f'{react}%':>11}")
+
+    lines += [
+        "",
+        "HOW TO APPLY IN MSFS:",
+        "  1. Open MSFS > Options > Controls",
+        "  2. Select your controller profile",
+        "  3. Find each axis and set Sensitivity / Dead Zone / Reactivity",
+        "  4. Save the profile",
+        "",
+        "Tip: In MSFS the axis sensitivity range is -100 to +100 (0 = linear).",
+    ]
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+    os.startfile(str(out_dir))
+    return jsonify({"ok": True, "path": str(out_path)})
+
+
 def get_bridge_dir():
     if getattr(sys, "frozen", False):
         return os.path.join(os.path.dirname(sys.executable), "bridge")
