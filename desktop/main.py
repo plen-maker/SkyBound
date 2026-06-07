@@ -211,6 +211,20 @@ def get_bridge_env_dir():
     return os.path.join(os.path.dirname(BASE), "bridge")
 
 _bridge_proc = None
+_bridge_log_buf = []
+
+def _bridge_reader(proc):
+    """Background thread: drains stdout pipe into _bridge_log_buf."""
+    global _bridge_log_buf
+    try:
+        for raw in proc.stdout:
+            line = raw.decode("utf-8", errors="replace").rstrip()
+            if line:
+                _bridge_log_buf.append(line)
+                if len(_bridge_log_buf) > 300:
+                    _bridge_log_buf = _bridge_log_buf[-200:]
+    except Exception:
+        pass
 
 @app.route("/api/bridge/status")
 def bridge_status():
@@ -284,6 +298,7 @@ def bridge_start():
             cmd = [node, "src/index.js"] + ([sim_mode] if sim_mode else [])
             cwd = bridge_dir
 
+        _bridge_log_buf.clear()
         _bridge_proc = subprocess.Popen(
             cmd,
             cwd=cwd,
@@ -291,6 +306,8 @@ def bridge_start():
             stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
+        import threading
+        threading.Thread(target=_bridge_reader, args=(_bridge_proc,), daemon=True).start()
         return jsonify({"ok": True, "pid": _bridge_proc.pid})
     except Exception as e:
         return jsonify({"error": str(e)})
@@ -312,20 +329,8 @@ def bridge_stop():
 
 @app.route("/api/bridge/log")
 def bridge_log():
-    global _bridge_proc
-    if not _bridge_proc:
-        return jsonify({"log": ""})
-    try:
-        import io
-        lines = []
-        while True:
-            line = _bridge_proc.stdout.readline()
-            if not line: break
-            lines.append(line.decode("utf-8", errors="replace").strip())
-            if len(lines) > 50: break
-        return jsonify({"log": "\n".join(lines)})
-    except:
-        return jsonify({"log": ""})
+    lines = _bridge_log_buf[-80:] if _bridge_log_buf else []
+    return jsonify({"log": "\n".join(lines)})
 
 @app.route("/api/update")
 def update():

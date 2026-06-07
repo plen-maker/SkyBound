@@ -1501,8 +1501,16 @@ async function renderBridge(m){
   const logBox=el("div");logBox.style.cssText="font-family:var(--mono);font-size:10px;color:var(--dim);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 10px;min-height:44px;max-height:160px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;margin-top:10px";
   logBox.textContent="—";
   const logRefBtn=el("button","btn btn-dk");logRefBtn.style.cssText="font-size:10px;padding:4px 10px;margin-top:7px";logRefBtn.textContent="↺ Frissít";
-  async function refreshLog(){const r=await api("/api/bridge/log");logBox.textContent=r.log||"(üres)";}
+  let _logTimer=null;
+  async function refreshLog(){
+    const r=await api("/api/bridge/log");
+    if(logBox)logBox.textContent=r.log||"(üres)";
+    if(logBox&&logBox.scrollHeight>logBox.clientHeight)logBox.scrollTop=logBox.scrollHeight;
+  }
+  function startLogPoll(){if(!_logTimer)_logTimer=setInterval(()=>{if(S.tab==="bridge"&&logBody.style.display!=="none")refreshLog();else stopLogPoll();},2000);}
+  function stopLogPoll(){clearInterval(_logTimer);_logTimer=null;}
   logRefBtn.addEventListener("click",refreshLog);
+  logHdr.addEventListener("click",()=>{if(logBody.style.display!=="none")startLogPoll();else stopLogPoll();});
   logBody.appendChild(logBox);logBody.appendChild(logRefBtn);logCard.appendChild(logBody);
   m.appendChild(logCard);
 }
