@@ -5,19 +5,48 @@ import { createEngine } from "./triggers.js";
 import { fetchOFP } from "../../shared/simbrief.js";
 import { initFirebase, writeLive, watchTriggers, pushToDevices, clearLive } from "./firebase.js";
 import { todDistanceNm } from "./geo.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const SESSION  = process.env.SKYBOUND_SESSION;
-const SVC      = process.env.FIREBASE_SERVICE_ACCOUNT;
 const SB_USER  = process.env.SIMBRIEF_USERNAME;
 const args     = process.argv.slice(2);
 let SIM_MODE   = process.env.SIM_MODE || "auto";
 if (args.includes("--fsuipc"))     SIM_MODE = "fsuipc7";
 if (args.includes("--simconnect")) SIM_MODE = "simconnect";
 
-if (!SESSION || !SVC) {
-  console.error("Hiányzik: SKYBOUND_SESSION és/vagy FIREBASE_SERVICE_ACCOUNT a .env-ben");
+if (!SESSION) {
+  console.error("Hiányzik: SKYBOUND_SESSION a .env-ben");
   process.exit(1);
 }
+
+function findServiceAccount() {
+  const candidates = [
+    process.env.FIREBASE_SERVICE_ACCOUNT,
+    // exe mellé rakva (pkg bundle)
+    process.execPath ? path.join(path.dirname(process.execPath), "serviceAccount.json") : null,
+    // script mellé rakva (dev)
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "../../serviceAccount.json"),
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "../serviceAccount.json"),
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "serviceAccount.json"),
+    // munkakönyvtárban
+    path.join(process.cwd(), "serviceAccount.json"),
+    // standard install hely
+    "C:\\Program Files\\Xdeck EFB\\bridge\\serviceAccount.json",
+  ].filter(Boolean);
+
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      console.log(`[fb] Service account: ${p}`);
+      return p;
+    }
+  }
+  console.error("[fb] serviceAccount.json nem található. Helyezd az exe mellé vagy add meg FIREBASE_SERVICE_ACCOUNT a .env-ben.");
+  process.exit(1);
+}
+
+const SVC = findServiceAccount();
 
 let ofp = null, triggers = [];
 const engine = createEngine();

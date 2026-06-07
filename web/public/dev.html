@@ -126,26 +126,8 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;bac
       </div>
 
       <div class="sect">Files</div>
-
-      <!-- Installer drop zone -->
-      <label style="font-size:11px;color:var(--dim);font-family:var(--mono);display:block;margin-bottom:6px">WINDOWS INSTALLER (.exe)</label>
-      <div class="drop-zone" id="dropWin" ondragover="onDragOver(event,'dropWin')" ondragleave="onDragLeave('dropWin')" ondrop="onDrop(event,'win')">
-        <input class="drop-input" type="file" accept=".exe" onchange="onFileSelect(event,'win')"/>
-        <div class="drop-icon">🖥</div>
-        <div class="drop-label"><b>Húzd ide</b> az .exe fájlt vagy kattints</div>
-        <div class="drop-file" id="winFile"></div>
-        <div class="progress-bar"><div class="progress-fill" id="winProgress"></div></div>
-      </div>
-
-      <!-- APK drop zone -->
-      <label style="font-size:11px;color:var(--dim);font-family:var(--mono);display:block;margin-top:12px;margin-bottom:6px">ANDROID APK (.apk)</label>
-      <div class="drop-zone" id="dropApk" ondragover="onDragOver(event,'dropApk')" ondragleave="onDragLeave('dropApk')" ondrop="onDrop(event,'apk')">
-        <input class="drop-input" type="file" accept=".apk" onchange="onFileSelect(event,'apk')"/>
-        <div class="drop-icon">📱</div>
-        <div class="drop-label"><b>Húzd ide</b> az .apk fájlt vagy kattints</div>
-        <div class="drop-file" id="apkFile"></div>
-        <div class="progress-bar"><div class="progress-fill" id="apkProgress"></div></div>
-      </div>
+      <div class="field"><label>WINDOWS INSTALLER URL (.exe)</label><input id="winUrl" placeholder="https://github.com/.../releases/download/.../Xdeck-EFB-Setup.exe"/></div>
+      <div class="field"><label>ANDROID APK URL (.apk)</label><input id="apkUrl" placeholder="https://github.com/.../releases/download/.../Xdeck-EFB.apk"/></div>
 
       <div class="sect">Changelog</div>
       <div class="field"><label>NOTES (optional)</label><input id="changelog" placeholder="What's new in this release..."/></div>
@@ -160,78 +142,19 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;bac
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <script>
 firebase.initializeApp({
   apiKey:"AIzaSyAxHmLWOIJl4xC44uHsRbxqzRhF4mA0kqE",
   authDomain:"simapp-99f40.firebaseapp.com",
   databaseURL:"https://simapp-99f40-default-rtdb.europe-west1.firebasedatabase.app",
-  storageBucket:"simapp-99f40.firebasestorage.app",
   projectId:"simapp-99f40",messagingSenderId:"993511543138",
   appId:"1:993511543138:web:ec3a0d3e19713160111c3b"
 });
-const auth=firebase.auth(), db=firebase.database(), storage=firebase.storage();
-
-// Upload state
-const urls={win:null,apk:null};
+const auth=firebase.auth(), db=firebase.database();
 
 function showMsg(id,text,type){
   const el=document.getElementById(id);
   el.textContent=text;el.className="msg "+type;
-}
-
-// Drag & drop handlers
-function onDragOver(e,id){e.preventDefault();document.getElementById(id).classList.add("over")}
-function onDragLeave(id){document.getElementById(id).classList.remove("over")}
-function onDrop(e,type){
-  e.preventDefault();
-  const id=type==="win"?"dropWin":"dropApk";
-  document.getElementById(id).classList.remove("over");
-  const file=e.dataTransfer.files[0];
-  if(file)uploadFile(file,type);
-}
-function onFileSelect(e,type){
-  const file=e.target.files[0];
-  if(file)uploadFile(file,type);
-}
-
-function uploadFile(file,type){
-  const isWin=type==="win";
-  const zoneId=isWin?"dropWin":"dropApk";
-  const fileId=isWin?"winFile":"apkFile";
-  const progressId=isWin?"winProgress":"apkProgress";
-  const zone=document.getElementById(zoneId);
-
-  // Validate extension
-  const ext=file.name.split(".").pop().toLowerCase();
-  if(isWin&&ext!=="exe"){zone.classList.add("err");document.getElementById(fileId).textContent="⚠ Csak .exe fájl!";return;}
-  if(!isWin&&ext!=="apk"){zone.classList.add("err");document.getElementById(fileId).textContent="⚠ Csak .apk fájl!";return;}
-
-  zone.classList.remove("done","err");
-  zone.classList.add("uploading");
-  document.getElementById(fileId).textContent=`⬆ ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`;
-
-  const path=`releases/${isWin?"installer":"apk"}/${file.name}`;
-  const ref=storage.ref(path);
-  const task=ref.put(file);
-
-  task.on("state_changed",
-    snap=>{
-      const pct=Math.round(snap.bytesTransferred/snap.totalBytes*100);
-      document.getElementById(progressId).style.width=pct+"%";
-      document.getElementById(fileId).textContent=`⬆ ${file.name} — ${pct}%`;
-    },
-    err=>{
-      zone.classList.remove("uploading");zone.classList.add("err");
-      document.getElementById(fileId).textContent="⚠ Hiba: "+err.message;
-    },
-    async()=>{
-      const url=await task.snapshot.ref.getDownloadURL();
-      urls[type]=url;
-      zone.classList.remove("uploading");zone.classList.add("done");
-      document.getElementById(fileId).textContent=`✓ ${file.name}`;
-    }
-  );
 }
 
 async function doLogin(){
@@ -262,6 +185,8 @@ async function loadCurrentRelease(){
     document.getElementById("curMeta").textContent=`${r.channel||"release"} · ${d}`;
     ["codename","version","changelog"].forEach(k=>{if(r[k])document.getElementById(k).value=r[k];});
     if(r.channel)document.getElementById("channel").value=r.channel;
+    if(r.installer_url)document.getElementById("winUrl").value=r.installer_url;
+    if(r.apk_url)document.getElementById("apkUrl").value=r.apk_url;
   }catch{}
 }
 
@@ -269,12 +194,8 @@ async function publish(){
   const get=id=>document.getElementById(id).value.trim();
   const codename=get("codename"),version=get("version");
   if(!codename||!version){showMsg("pubMsg","Codename és version kötelező.","err");return;}
-  if(!urls.win&&!urls.apk){showMsg("pubMsg","Tölts fel legalább egy fájlt.","err");return;}
-
-  // Check if any upload is still in progress
-  if(document.querySelector(".drop-zone.uploading")){
-    showMsg("pubMsg","Várd meg amíg a feltöltés befejeződik.","err");return;
-  }
+  const winUrl=get("winUrl"), apkUrl=get("apkUrl");
+  if(!winUrl&&!apkUrl){showMsg("pubMsg","Adj meg legalább egy download URL-t.","err");return;}
 
   const btn=document.getElementById("pubBtn");
   btn.disabled=true;btn.textContent="Publishing...";
@@ -283,8 +204,8 @@ async function publish(){
     await db.ref("releases/latest").set({
       codename,version,
       channel:document.getElementById("channel").value,
-      installer_url:urls.win||null,
-      apk_url:urls.apk||null,
+      installer_url:winUrl||null,
+      apk_url:apkUrl||null,
       changelog:get("changelog"),
       updated_at:Date.now(),
       updated_by:auth.currentUser?.email||""
