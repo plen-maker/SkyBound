@@ -1727,49 +1727,103 @@ function renderLanding(m){
 
 // ── LOGBOOK (Volanta-stílusú napló) ───────────────────────────────
 function renderLogbook(m){
+  m.style.padding="0";m.style.overflow="auto";
   const lb=_logbookGet();
-  const sl=el("div","sl anim");sl.textContent="Repülési napló";m.appendChild(sl);
+  const isDemo=!lb.length;
+  const entries=isDemo?[
+    {dep:"LHBP",arr:"EGLL",aircraft:"Airbus A320neo (CFM)",fpm:-182,gs:131,ias:136,ftMin:152,ts:Date.now()-86400000*1},
+    {dep:"EGLL",arr:"EDDM",aircraft:"Boeing 737-800 Ryanair",fpm:-298,gs:138,ias:143,ftMin:103,ts:Date.now()-86400000*4},
+    {dep:"EDDM",arr:"LIRF",aircraft:"Airbus A320neo (CFM)",fpm:-487,gs:145,ias:149,ftMin:78,ts:Date.now()-86400000*8},
+    {dep:"LIRF",arr:"LHBP",aircraft:"Embraer E190",fpm:-611,gs:122,ias:126,ftMin:85,ts:Date.now()-86400000*15},
+  ]:lb;
 
-  if(!lb.length){
-    const emp=el("div","card anim");emp.style.cssText="text-align:center;padding:44px 20px";
-    emp.innerHTML=`<div style='font-size:38px;margin-bottom:12px;opacity:.2'>📖</div>
-      <div style='font-size:13px;color:var(--dim)'>Még nincs bejegyzés.</div>
-      <div style='font-size:11px;color:var(--dim);margin-top:6px'>Landolj egyet a bridge segítségével — automatikusan bekerül.</div>`;
-    m.appendChild(emp);return;
+  const totalFlights=entries.length;
+  const totalMins=entries.reduce((s,e)=>s+(e.ftMin||0),0);
+  const avgFpm=Math.round(entries.reduce((s,e)=>s+Math.abs(e.fpm||0),0)/entries.length);
+  const bestEntry=entries.reduce((b,e)=>Math.abs(e.fpm)<Math.abs(b.fpm)?e:b,entries[0]);
+
+  // ── Header banner
+  const hdr=el("div");
+  hdr.style.cssText="background:linear-gradient(160deg,#0e141f 0%,#131a27 60%,#0a0f17 100%);padding:20px 18px 18px;border-bottom:1px solid var(--line)";
+  const hdrTop=el("div");hdrTop.style.cssText="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px";
+  const hdrLeft=el("div");
+  hdrLeft.innerHTML=`<div style='font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px'>Flight Logbook</div>
+    <div style='font-size:26px;font-weight:900;color:var(--tx);line-height:1'>${totalFlights}<span style='font-size:13px;font-weight:500;color:var(--dim);margin-left:6px'>flight${totalFlights!==1?"s":""}</span></div>`;
+  const hdrRight=el("div");
+  if(isDemo){hdrRight.innerHTML=`<div style='font-size:10px;color:var(--dim);background:#ffffff08;border:1px solid var(--line);border-radius:8px;padding:5px 11px'>Preview</div>`;}
+  else{hdrRight.innerHTML=`<div style='font-size:10px;color:var(--dim)'>Bridge → auto</div>`;}
+  hdrTop.appendChild(hdrLeft);hdrTop.appendChild(hdrRight);hdr.appendChild(hdrTop);
+
+  const statsGrid=el("div");statsGrid.style.cssText="display:grid;grid-template-columns:repeat(4,1fr);gap:8px";
+  [
+    {v:totalFlights,l:"Flights",c:"var(--cy)"},
+    {v:_fmtFt(totalMins),l:"Total time",c:"var(--cy)"},
+    {v:Math.abs(bestEntry?.fpm||0)+" fpm",l:"Best VS",c:"#52e3b0"},
+    {v:avgFpm+" fpm",l:"Avg VS",c:"var(--cy)"},
+  ].forEach(s=>{
+    const cell=el("div");cell.style.cssText="background:#ffffff07;border:1px solid var(--line);border-radius:10px;padding:11px 8px 9px;text-align:center";
+    cell.innerHTML=`<div style='font-size:16px;font-weight:800;color:${s.c};font-variant-numeric:tabular-nums;line-height:1'>${s.v}</div>
+      <div style='font-size:8px;color:var(--dim);margin-top:4px;text-transform:uppercase;letter-spacing:.07em'>${s.l}</div>`;
+    statsGrid.appendChild(cell);
+  });
+  hdr.appendChild(statsGrid);
+  m.appendChild(hdr);
+
+  const listWrap=el("div");listWrap.style.cssText="padding:12px 14px 24px";
+
+  if(isDemo){
+    const notice=el("div");notice.style.cssText="text-align:center;padding:6px 0 14px;font-size:10px;color:var(--dim);opacity:.7";
+    notice.textContent="Preview mode — fly with the bridge to populate your logbook automatically.";
+    listWrap.appendChild(notice);
   }
 
-  // Summary stats
-  const totalFlights=lb.length;
-  const totalMins=lb.reduce((s,e)=>s+(e.ftMin||0),0);
-  const avgFpm=Math.round(lb.reduce((s,e)=>s+Math.abs(e.fpm||0),0)/lb.length);
-  const sumCard=el("div","card anim");sumCard.style.cssText="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-bottom:8px;padding:0;overflow:hidden;animation-delay:20ms";
-  [{v:totalFlights,l:"Repülések"},{v:_fmtFt(totalMins),l:"Össz. idő"},{v:avgFpm+" fpm",l:"Átlag VS"}].forEach((s,i)=>{
-    const d=el("div");d.style.cssText=`text-align:center;padding:14px 8px;${i<2?"border-right:1px solid var(--line)":""}`;
-    d.innerHTML=`<div style='font-size:20px;font-weight:800;color:var(--cy);font-variant-numeric:tabular-nums'>${s.v}</div><div style='font-size:9px;color:var(--dim);margin-top:3px'>${s.l}</div>`;
-    sumCard.appendChild(d);
-  });
-  m.appendChild(sumCard);
-
-  lb.slice(0,50).forEach((e,i)=>{
+  entries.slice(0,60).forEach((e,i)=>{
     const [ql,qc]=_qLabel(e.fpm);
-    const row=el("div","card anim");row.style.cssText=`animation-delay:${40+i*20}ms;padding:11px 14px;margin-bottom:5px`;
-    const top=el("div","flex aic jb");
-    const route=el("div");
-    const ac=(e.aircraft||"").replace(/\(.*\)/g,"").trim().substring(0,26);
-    route.innerHTML=`<span style='font-weight:700;font-size:14px'>${e.dep||"???"} → ${e.arr||"???"}</span>${ac?`<span style='font-size:10px;color:var(--dim);margin-left:8px'>${ac}</span>`:""}`;
-    const badge=el("div");badge.style.cssText=`font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;background:${qc}18;border:1px solid ${qc}30;color:${qc}`;badge.textContent=ql;
-    top.appendChild(route);top.appendChild(badge);row.appendChild(top);
-    const bot=el("div","flex gap12");bot.style.cssText="margin-top:7px";
-    [[`${e.fpm||0} fpm`],[`${e.gs||0} kt`],[_fmtFt(e.ftMin)],[new Date(e.ts).toLocaleDateString()]].forEach(([v])=>{
-      const s=el("span");s.style.cssText="font-size:10px;color:var(--dim);font-variant-numeric:tabular-nums";s.textContent=v;bot.appendChild(s);
+    const d=new Date(e.ts);
+    const dateStr=d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+    const timeStr=d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+    const ac=(e.aircraft||"Unknown aircraft").replace(/\(.*?\)/g,"").trim();
+
+    const card=el("div");
+    card.style.cssText=`background:var(--card);border:1px solid var(--line);border-left:3px solid ${qc};border-radius:12px;padding:13px 14px 11px;margin-bottom:8px;animation:fadeUp .25s ease both;animation-delay:${i*25}ms`;
+
+    // Top row: route + badge
+    const topRow=el("div");topRow.style.cssText="display:flex;align-items:flex-start;justify-content:space-between;gap:10px";
+    const routeDiv=el("div");routeDiv.style.cssText="min-width:0";
+    routeDiv.innerHTML=`<div style='display:flex;align-items:center;gap:8px'>
+      <span style='font-size:21px;font-weight:900;letter-spacing:.04em;color:var(--tx)'>${e.dep||"????"}</span>
+      <svg width='20' height='10' viewBox='0 0 24 10' fill='none' stroke='${qc}' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='flex-shrink:0'><path d='M2 5h18'/><polyline points='16 1 22 5 16 9'/></svg>
+      <span style='font-size:21px;font-weight:900;letter-spacing:.04em;color:var(--tx)'>${e.arr||"????"}</span>
+    </div>
+    <div style='font-size:10px;color:var(--dim);margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>${ac}</div>`;
+    const badgeCol=el("div");badgeCol.style.cssText="flex-shrink:0;text-align:right";
+    badgeCol.innerHTML=`<div style='font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;background:${qc}18;border:1px solid ${qc}33;color:${qc};white-space:nowrap'>${ql}</div>
+      <div style='font-size:17px;font-weight:800;color:${qc};margin-top:6px;font-variant-numeric:tabular-nums'>${e.fpm||0}<span style='font-size:9px;font-weight:500;color:var(--dim);margin-left:2px'>fpm</span></div>`;
+    topRow.appendChild(routeDiv);topRow.appendChild(badgeCol);card.appendChild(topRow);
+
+    // Bottom row: stats + date
+    const botRow=el("div");botRow.style.cssText="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:9px;border-top:1px solid var(--line)";
+    const statsDiv=el("div");statsDiv.style.cssText="display:flex;gap:14px";
+    [e.gs?[e.gs,"GS kt"]:null,e.ias?[e.ias,"IAS kt"]:null,e.ftMin?[_fmtFt(e.ftMin),"Time"]:null].filter(Boolean).forEach(([v,l])=>{
+      const s=el("div");s.style.cssText="text-align:center";
+      s.innerHTML=`<div style='font-size:12px;font-weight:600;color:var(--tx);font-variant-numeric:tabular-nums'>${v}</div><div style='font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-top:1px'>${l}</div>`;
+      statsDiv.appendChild(s);
     });
-    row.appendChild(bot);m.appendChild(row);
+    const dateDiv=el("div");dateDiv.style.cssText="text-align:right";
+    dateDiv.innerHTML=`<div style='font-size:10px;color:var(--dim)'>${dateStr}</div><div style='font-size:9px;color:var(--dim);opacity:.55;margin-top:1px'>${timeStr}</div>`;
+    botRow.appendChild(statsDiv);botRow.appendChild(dateDiv);card.appendChild(botRow);
+
+    listWrap.appendChild(card);
   });
 
-  const clrRow=el("div");clrRow.style.cssText="text-align:right;margin-top:6px";
-  const clrBtn=el("button","btn btn-dk");clrBtn.style.cssText="font-size:10px;padding:5px 12px";clrBtn.textContent="Napló törlése";
-  clrBtn.addEventListener("click",()=>{if(confirm("Törlöd az összes bejegyzést?")){localStorage.removeItem("xdeck_logbook");renderTab();}});
-  clrRow.appendChild(clrBtn);m.appendChild(clrRow);
+  if(!isDemo){
+    const clrRow=el("div");clrRow.style.cssText="text-align:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)";
+    const clrBtn=el("button","btn btn-dk");clrBtn.style.cssText="font-size:10px;padding:5px 16px;opacity:.45";clrBtn.textContent="Clear logbook";
+    clrBtn.addEventListener("click",()=>{if(confirm("Delete all logbook entries?")){localStorage.removeItem("xdeck_logbook");renderTab();}});
+    clrRow.appendChild(clrBtn);listWrap.appendChild(clrRow);
+  }
+
+  m.appendChild(listWrap);
 }
 
 // ── SETTINGS ──────────────────────────────────────────────────────
