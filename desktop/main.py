@@ -131,6 +131,21 @@ def metar():
         return jsonify({"error":str(e)})
 
 
+@app.route("/api/atis")
+def atis():
+    icao = request.args.get("icao","").upper()
+    if not icao: return jsonify({"error":"Nincs ICAO"})
+    try:
+        r = req.get(f"https://datis.clowd.io/api/{icao}", timeout=8)
+        if r.status_code == 404:
+            return jsonify({"error": f"Nincs D-ATIS: {icao} (csak FAA repülőterekre elérhető)"})
+        r.raise_for_status()
+        data = r.json()
+        return jsonify(data if isinstance(data, list) else [data])
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
 @app.route("/api/control-center/apply", methods=["POST"])
 def cc_apply():
     import pathlib, datetime

@@ -418,7 +418,7 @@ const auth=firebase.auth(), db=firebase.database();
 const S={
   tab:"home", user:null, isDev:false,
   cfg:{
-    sbUser:"ddnemet", fenixUrl:"", sessionCode:"ddnemet-host",
+    sbUser:"", fenixUrl:"", sessionCode:"",
     theme:"dark", ofpMode:"simplified", gridCols:"4",
     linkMode:"browser", autoLoadOfp:true,
     timeMode:"utc", speedUnit:"kt", weightUnit:"kg",
@@ -634,6 +634,7 @@ function renderTab(){
   if(S.tab==="map"&&$("leafletMap"))return;
   if(S.tab!=="map")window._lfMap=null;
   m.innerHTML="";m.style.padding="20px 22px";m.style.overflow="auto";
+  m.style.display="";m.style.alignItems="";m.style.justifyContent="";m.style.flexDirection="";m.style.minHeight="0";
   ({home:renderHome,map:renderMap,metar:renderMetar,ofp:renderOFP,vatsim:renderVatsim,
     charts:renderCharts,alerts:renderAlerts,ctrl:renderCtrl,bridge:renderBridge,settings:renderSettings})[S.tab]?.(m);
 }
@@ -781,7 +782,7 @@ function renderOFP(m){
   const card=el("div","card anim");
   const lbl=el("div");lbl.style.cssText="font-size:8px;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:7px";lbl.textContent="Simbrief usernév";
   const row=el("div","flex gap8 aic");
-  const inp=el("input","inp f1");inp.placeholder="pl. ddnemet";inp.value=cfg.sbUser||"";
+  const inp=el("input","inp f1");inp.placeholder="SimBrief Pilot ID";inp.value=cfg.sbUser||"";
   inp.addEventListener("keydown",e=>{if(e.key==="Enter")loadOFP(inp.value);});
   const lb=el("button","btn btn-cy");lb.textContent=ofpLoading?"↻ Betöltés...":"📄 Betölt";
   lb.addEventListener("click",()=>loadOFP(inp.value));
@@ -934,16 +935,16 @@ function renderCharts(m){
   });
   card.appendChild(qr);m.appendChild(card);
   const grid=el("div","g2 mt8 anim");
-  [{n:"MSFS Flight Planner",d:"Microsoft Lido chartok",c:"var(--cy)",b:"MSFS",url:"https://planner.flightsimulator.com/"},
-   {n:"Navigraph Charts",d:"Jeppesen-stílusú chartok",c:"var(--pu)",b:"Előfizetéses",url:"https://charts.navigraph.com"}].forEach(p=>{
+  [{n:"MSFS Flight Planner",d:"Microsoft Lido chartok",c:"var(--cy)",b:"MSFS",url:"https://planner.flightsimulator.com/",ext:true},
+   {n:"Navigraph Charts",d:"Jeppesen-stílusú chartok",c:"var(--pu)",b:"Előfizetéses",url:"https://charts.navigraph.com",ext:false}].forEach(p=>{
     const tile=el("button","tile");
     tile.innerHTML=`<div style='display:flex;justify-content:space-between;margin-bottom:9px'>
       <div class='tile-ic' style='color:${p.c};width:30px;height:30px'><svg viewBox='0 0 24 24'><circle cx='12' cy='12' r='10'/><line x1='2' y1='12' x2='22' y2='12'/><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'/></svg></div>
       <span style='border-radius:99px;padding:2px 7px;font-size:9px;font-weight:700;background:rgba(128,128,128,.1);border:1px solid rgba(128,128,128,.2);color:${p.c}'>${p.b}</span>
     </div>
     <div style='font-size:12px;font-weight:600;margin-bottom:3px'>${p.n}</div>
-    <div style='font-size:10px;color:var(--dim)'>${p.d}</div>`;
-    tile.addEventListener("click",()=>openBrowser(p.url));grid.appendChild(tile);
+    <div style='font-size:10px;color:var(--dim)'>${p.d}${p.ext?" · ↗ Külső browser":""}</div>`;
+    tile.addEventListener("click",()=>p.ext?window.open(p.url,"_blank"):openBrowser(p.url));grid.appendChild(tile);
   });
   m.appendChild(grid);
 }
@@ -984,18 +985,115 @@ function renderAlerts(m){
   });
 }
 
-// ── CTRL ──────────────────────────────────────────────────────────
+// ── CTRL (Control Center) ─────────────────────────────────────────
+const CC_DB=[
+  {id:"fenix",name:"Fenix A320 Family",pat:["fenix"],col:"#5ec8ff",
+    sidestick:{ck:"sid",axes:[{n:"Aileron",sens:0,dz:0,r:100},{n:"Elevator",sens:0,dz:0,r:100},{n:"Rudder",sens:0,dz:0,r:100}],note:"Lineáris (0%) érzékenység — Fenix FBW veszi át.",src:"FenixSim"},
+    throttle:{ck:"qthr",axes:[{n:"Throttle 1",sens:0,dz:2,r:100},{n:"Throttle 2",sens:0,dz:2,r:100},{n:"Spoilers",sens:0,dz:0,r:100},{n:"Flaps",sens:0,dz:0,r:100}],note:"2% null zone a throttle tengelyeken.",src:"FenixSim"}},
+  {id:"pmdg737",name:"PMDG 737",pat:["pmdg 737","boeing 737","b737"],col:"#ffb454",
+    yoke:{ck:"yoke",axes:[{n:"Aileron",sens:-30,dz:5,r:100},{n:"Elevator",sens:-30,dz:5,r:100},{n:"Rudder",sens:0,dz:5,r:100}],note:"−30% érzékenység a felfúgatott vezérlőfelületekhez.",src:"PMDG forum"},
+    throttle:{ck:"bthr",axes:[{n:"Throttle 1",sens:0,dz:3,r:100},{n:"Throttle 2",sens:0,dz:3,r:100},{n:"Spoilers",sens:0,dz:0,r:100},{n:"Flaps",sens:0,dz:0,r:100}],note:"3% null zone.",src:"Community"}},
+  {id:"pmdg777",name:"PMDG 777",pat:["pmdg 777","boeing 777","b777"],col:"#52e3b0",
+    yoke:{ck:"yoke",axes:[{n:"Aileron",sens:-30,dz:5,r:80},{n:"Elevator",sens:-30,dz:5,r:80},{n:"Rudder",sens:0,dz:5,r:100}],note:"−30% érzékenység, 80% reaktivitás a nehéz vezérlő érzéshez.",src:"PMDG forum"},
+    throttle:{ck:"bthr",axes:[{n:"Throttle 1",sens:0,dz:3,r:100},{n:"Throttle 2",sens:0,dz:3,r:100},{n:"Spoilers",sens:0,dz:0,r:100}],note:"3% null zone.",src:"Community"}},
+  {id:"md11",name:"PMDG MD-11",pat:["md-11","md11"],col:"#a78bfa",
+    yoke:{ck:"yoke",axes:[{n:"Aileron",sens:-20,dz:5,r:90},{n:"Elevator",sens:-20,dz:5,r:90},{n:"Rudder",sens:0,dz:5,r:100}],note:"−20% érzékenység az MD-11 karakterisztikájához.",src:"Community"},
+    throttle:{ck:"bthr",axes:[{n:"Throttle 1",sens:0,dz:3,r:100},{n:"Throttle 2",sens:0,dz:3,r:100},{n:"Throttle 3",sens:0,dz:3,r:100},{n:"Spoilers",sens:0,dz:0,r:100}],note:"3 throttle, 3% null zone.",src:"Community"}},
+  {id:"fslabs",name:"FSLabs A321 NEO",pat:["fslabs","a321 neo","a321neo"],col:"#f06080",
+    sidestick:{ck:"sid",axes:[{n:"Aileron",sens:0,dz:0,r:100},{n:"Elevator",sens:0,dz:0,r:100},{n:"Rudder",sens:0,dz:0,r:100}],note:"Lineáris érzékenység — FSLabs FBW kezeli.",src:"FSLabs community"},
+    throttle:{ck:"qthr",axes:[{n:"Throttle 1",sens:0,dz:2,r:100},{n:"Throttle 2",sens:0,dz:2,r:100},{n:"Spoilers",sens:0,dz:0,r:100},{n:"Flaps",sens:0,dz:0,r:100}],note:"2% null zone.",src:"Community"}},
+];
+const CC_CTRL={
+  sid: {n:"TCA Sidestick Airbus",img:"/controllers/tca-sidestick-airbus.webp",pat:["airbus edition","tca sidestick","tca-sidestick"]},
+  qthr:{n:"TCA Quadrant Airbus",img:"/controllers/tca-quadrant-airbus.webp",pat:["quadrant airbus","tca-quadrant airbus","quadrant add-on airbus"]},
+  yoke:{n:"TCA Yoke Boeing",img:"/controllers/tca-yoke-boeing.webp",pat:["boeing yoke","tca yoke","yoke boeing"]},
+  bthr:{n:"TCA Quadrant Boeing",img:"/controllers/tca-quadrant-boeing.jpg",pat:["boeing throttle","quadrant boeing","tca quadrant boeing"]},
+};
+function _ccDetectAC(title){if(!title)return null;const t=title.toLowerCase();return CC_DB.find(a=>a.pat.some(p=>t.includes(p)))||null;}
+function _ccDetectedCtrls(){const gps=Array.from(navigator.getGamepads?.()??[]).filter(Boolean);return Object.entries(CC_CTRL).filter(([,c])=>gps.some(g=>c.pat.some(p=>g.id.toLowerCase().includes(p)))).map(([k,c])=>({...c,key:k}));}
+
+let _ccTab="official";
 function renderCtrl(m){
-  m.style.display="flex";m.style.flexDirection="column";m.style.alignItems="center";m.style.justifyContent="center";m.style.minHeight="60vh";
-  const wrap=el("div");wrap.style.cssText="text-align:center;max-width:340px";
-  const icon=el("div");icon.style.cssText="width:64px;height:64px;border-radius:16px;background:var(--p2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;margin:0 auto 20px";
-  icon.innerHTML="<svg viewBox='0 0 24 24' width='28' height='28' stroke='var(--cy)' fill='none' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='6' width='20' height='12' rx='2'/><path d='M12 12h.01'/><path d='M17 12h.01'/><path d='M7 12h.01'/></svg>";
-  const title=el("div");title.style.cssText="font-size:22px;font-weight:800;color:var(--tx);margin-bottom:8px;letter-spacing:.3px";title.textContent="Coming Soon";
-  const sub=el("div");sub.style.cssText="font-size:13px;color:var(--dim);line-height:1.7;margin-bottom:20px";
-  sub.innerHTML="A vezérlő integrációhoz egy <strong style='color:var(--tx)'>Flare Hardware</strong> bővítmény szükséges.<br>Hamarosan elérhető.";
-  const badge=el("div");badge.style.cssText="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:99px;background:rgba(94,200,255,.08);border:1px solid rgba(94,200,255,.2);color:var(--cy);font-size:11px;font-weight:600";
-  badge.textContent="🎮 Flare Hardware — Q3 2026";
-  wrap.appendChild(icon);wrap.appendChild(title);wrap.appendChild(sub);wrap.appendChild(badge);m.appendChild(wrap);
+  const ac=_ccDetectAC(S.live?.aircraftTitle);
+  // Header
+  const hdr=el("div","flex aic jb anim");hdr.style.marginBottom="12px";
+  const left=el("div");
+  const sl=el("div","sl");sl.style.margin="0";sl.textContent="Control Center";left.appendChild(sl);
+  if(S.live?.aircraftTitle){
+    const at=el("div");at.style.cssText="display:flex;align-items:center;gap:6px;margin-top:4px";
+    const dot=el("div");dot.style.cssText=`width:6px;height:6px;border-radius:50%;background:${ac?"var(--gn)":"var(--am)"}`;
+    const atxt=el("span");atxt.style.cssText=`font-size:11px;color:${ac?"var(--gn)":"var(--am)"}`;atxt.textContent=ac?ac.name:"Ismeretlen repülő";
+    const sub=el("span");sub.style.cssText="font-size:10px;color:var(--dim)";sub.textContent="— "+S.live.aircraftTitle;
+    at.appendChild(dot);at.appendChild(atxt);at.appendChild(sub);left.appendChild(at);
+  }else{const wt=el("div");wt.style.cssText="font-size:11px;color:var(--dim);margin-top:4px";wt.textContent="Várakozás a bridge adataira...";left.appendChild(wt);}
+  hdr.appendChild(left);
+  const tabs=el("div","flex gap6");
+  ["official","custom"].forEach(t=>{
+    const b=el("button","pill"+(_ccTab===t?" on":""));b.textContent=t==="official"?"Official":"Custom";
+    b.style.cursor="pointer";b.addEventListener("click",()=>{_ccTab=t;renderTab();});tabs.appendChild(b);
+  });
+  hdr.appendChild(tabs);m.appendChild(hdr);
+  if(_ccTab==="official") _ccRenderOfficial(m,ac);
+  else _ccRenderCustom(m);
+}
+
+function _ccRenderOfficial(m,ac){
+  if(!ac){
+    const empty=el("div","card");empty.style.cssText="text-align:center;padding:36px 20px";
+    empty.innerHTML=`<div style='font-size:32px;margin-bottom:10px;opacity:.3'>🎮</div>
+      <div style='font-size:13px;color:var(--dim)'>${S.live?.aircraftTitle?`Nincs preset: "${S.live.aircraftTitle}"`:"Indítsd el a bridge-et és szállj be egy repülőbe."}</div>
+      <div style='font-size:11px;color:var(--dim);margin-top:8px;line-height:1.5'>Fenix A320 · PMDG 737 · PMDG 777 · PMDG MD-11 · FSLabs A321</div>`;
+    m.appendChild(empty);return;
+  }
+  const presets=[];
+  ["sidestick","yoke"].forEach(role=>{if(ac[role])presets.push({role,preset:ac[role]});});
+  if(ac.throttle)presets.push({role:"throttle",preset:ac.throttle});
+  presets.forEach((p,i)=>{
+    const ctrl=CC_CTRL[p.preset.ck]||{n:p.preset.ck,img:null};
+    const card=el("div","card anim");card.style.cssText="padding:0;overflow:hidden;margin-bottom:8px;animation-delay:"+(i*50)+"ms";
+    const ch=el("div","flex aic gap10");ch.style.cssText="padding:11px 15px;background:var(--p2);border-bottom:1px solid var(--line)";
+    if(ctrl.img){const img=el("img");img.src=ctrl.img;img.alt=ctrl.n;img.style.cssText="width:44px;height:44px;object-fit:contain;border-radius:7px;background:#fff;padding:3px;flex-shrink:0";ch.appendChild(img);}
+    const ci=el("div","f1");ci.innerHTML=`<div style='font-weight:600;font-size:13px'>${ctrl.n}</div><div style='font-size:10px;color:var(--dim);margin-top:2px'>${ac.name} · ${p.preset.src}</div>`;
+    ch.appendChild(ci);
+    const ab=el("button","btn btn-cy");ab.style.cssText="font-size:11px;padding:6px 13px";ab.textContent="Apply";
+    ab.addEventListener("click",async()=>{
+      ab.textContent="⏳";ab.disabled=true;
+      const r=await api("/api/control-center/apply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({aircraft:ac.name,controller:ctrl.n,axes:p.preset.axes.map(a=>({name:a.n,sens:a.sens,dz:a.dz,react:a.r}))})});
+      ab.disabled=false;
+      if(r.ok){ab.textContent="✓";ab.style.cssText=ab.style.cssText+"background:rgba(82,227,176,.15);color:var(--gn);border:1px solid rgba(82,227,176,.3)";}
+      else{ab.textContent="✗";ab.style.color="var(--rd)";}
+    });
+    ch.appendChild(ab);card.appendChild(ch);
+    const abody=el("div");abody.style.cssText="padding:4px 15px 12px";
+    p.preset.axes.forEach(ax=>{
+      const row=el("div","flex aic gap8");row.style.cssText="padding:6px 0;border-bottom:1px solid rgba(28,45,66,.5)";
+      const nm=el("div");nm.style.cssText="width:120px;font-size:11px;flex-shrink:0";nm.textContent=ax.n;
+      const vd=el("div");vd.style.cssText="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px";
+      [[`${ax.sens>=0?"+":""}${ax.sens}%`,ax.sens<0?"var(--am)":"var(--cy)","Sens"],
+       [`${ax.dz}%`,"var(--gn)","DZ"],[`${ax.r}%`,"var(--pu)","React"]].forEach(([v,c,l])=>{
+        const d=el("div");d.style.cssText="background:var(--p2);border-radius:6px;padding:3px 7px;border:1px solid var(--line)";
+        d.innerHTML=`<div style='font-size:8px;color:var(--dim)'>${l}</div><div style='font-size:12px;font-weight:700;color:${c}'>${v}</div>`;
+        vd.appendChild(d);
+      });
+      row.appendChild(nm);row.appendChild(vd);abody.appendChild(row);
+    });
+    if(p.preset.note){const nt=el("div");nt.style.cssText="font-size:10px;color:var(--dim);margin-top:7px;padding:5px 9px;background:var(--bg);border-radius:7px;border:1px solid var(--line);line-height:1.5";nt.textContent="💡 "+p.preset.note;abody.appendChild(nt);}
+    card.appendChild(abody);m.appendChild(card);
+  });
+}
+
+function _ccRenderCustom(m){
+  const sl2=el("div","sl");sl2.textContent="Vezérlők";m.appendChild(sl2);
+  const grid=el("div","g2 anim");
+  Object.entries(CC_CTRL).forEach(([,c])=>{
+    const btn=el("button","tile");btn.style.cssText="text-align:center;padding:10px";
+    btn.innerHTML=`<img src='${c.img}' alt='${c.n}' style='width:100%;height:62px;object-fit:contain;margin-bottom:6px'><div style='font-size:10px;font-weight:700'>${c.n}</div>`;
+    grid.appendChild(btn);
+  });
+  m.appendChild(grid);
+  const ph=el("div","card anim");ph.style.cssText="text-align:center;padding:22px;margin-top:8px";
+  ph.innerHTML="<div style='font-size:13px;color:var(--dim);margin-bottom:5px'>🚧 Interaktív gomb konfiguráció</div><div style='font-size:11px;color:var(--dim)'>Hamarosan</div>";
+  m.appendChild(ph);
 }
 
 
@@ -1056,9 +1154,9 @@ function parseMetar(raw) {
 }
 
 function windArrow(dir) {
-  if(dir==="VRB") return "↻";
-  const arrows=["↓","↙","←","↖","↑","↗","→","↘"];
-  return arrows[Math.round(((dir+180)%360)/45)%8];
+  if(dir==="VRB") return `<svg viewBox='0 0 20 20' width='28' height='28'><text x='10' y='16' text-anchor='middle' font-size='16' fill='var(--cy)'>↻</text></svg>`;
+  const rot=(dir+180)%360;
+  return `<svg viewBox='0 0 20 20' width='28' height='28' style='transform:rotate(${rot}deg);transition:transform .3s'><polygon points='10,2 13.5,11 10,8.5 6.5,11' fill='var(--cy)'/><line x1='10' y1='8.5' x2='10' y2='18' stroke='var(--cy)' stroke-width='2.5' stroke-linecap='round'/></svg>`;
 }
 
 function cloudColor(type) {
@@ -1126,7 +1224,7 @@ function renderMetar(m) {
     // Wind
     if(p?.windDir!==undefined){
       const wRow=el("div","flex aic gap8");wRow.style.marginBottom="8px";
-      const wIcon=el("div");wIcon.style.cssText="font-size:28px;width:36px;text-align:center";wIcon.textContent=windArrow(p.windDir);
+      const wIcon=el("div");wIcon.style.cssText="width:36px;display:flex;align-items:center;justify-content:center";wIcon.innerHTML=windArrow(p.windDir);
       const wInfo=el("div");
       const gustStr=p.windGust?` G${p.windGust}`:"";
       wInfo.innerHTML=`<div style='font-size:20px;font-weight:700;font-variant-numeric:tabular-nums'>${p.windDir==="VRB"?"VRB":p.windDir+"°"} ${p.windSpd}${gustStr} kt</div>
@@ -1175,31 +1273,67 @@ function renderMetar(m) {
     m.appendChild(card2);
   });
 
+  // D-ATIS section
+  if(_metarIcao) _renderAtis(m, _metarIcao);
+
   // Auto-load DEP on first visit
   if(!_metarData&&!_metarLoading&&_metarIcao) loadMetar(_metarIcao);
 }
 
+let _atisCache={};
+async function _renderAtis(m, icao){
+  if(!icao) return;
+  let data=_atisCache[icao];
+  if(!data){
+    try{
+      const r=await api("/api/atis?icao="+encodeURIComponent(icao));
+      if(r.error){return;}
+      data=r; _atisCache[icao]=data;
+    }catch(e){return;}
+  }
+  if(!data||!data.length) return;
+  const sl=el("div","sl");sl.textContent="D-ATIS";sl.style.marginTop="8px";m.appendChild(sl);
+  data.forEach((entry,i)=>{
+    const card=el("div","card anim");card.style.animationDelay=(i*40)+"ms";
+    const hrow=el("div","flex aic jb");hrow.style.marginBottom="7px";
+    const typeDiv=el("div");
+    const t=entry.type||"";
+    const col=t==="dep"?"var(--gn)":t==="arr"?"var(--cy)":"var(--am)";
+    typeDiv.innerHTML=`<span style='font-size:11px;font-weight:700;background:${col}18;border:1px solid ${col}35;color:${col};padding:3px 10px;border-radius:8px'>${t?t.toUpperCase():"ATIS"}</span>`;
+    const info=el("div");info.style.cssText="font-size:10px;color:var(--dim)";info.textContent=`${entry.airport||icao} · ${entry.code?("Info "+entry.code):""}`;
+    hrow.appendChild(info);hrow.appendChild(typeDiv);card.appendChild(hrow);
+    const txt=el("div");txt.style.cssText="font-family:var(--mono);font-size:10px;color:var(--tx);line-height:1.65;word-break:break-word;white-space:pre-wrap";
+    txt.textContent=entry.datis||entry.text||"";
+    card.appendChild(txt);m.appendChild(card);
+  });
+}
+
 // ── BRIDGE TAB ────────────────────────────────────────────────────
 async function renderBridge(m){
-  const hdr=el("div","sl anim");hdr.textContent="Bridge konfiguráció";m.appendChild(hdr);
 
-  // Status card
-  const sc=el("div","card anim");sc.style.marginBottom="8px";
-  const srow2=el("div","flex aic jb");
-  const stTxt=el("div");
-  stTxt.innerHTML=`<div class='slabel'>SimBridge státusz</div><div class='sdesc' id='bStatusDesc'>Ellenőrzés...</div>`;
-  const stBtn=el("button","btn");stBtn.id="bToggleBtn";stBtn.style.fontSize="11px";stBtn.style.padding="6px 14px";
+  // ── Big start/stop card ──────────────────────────────────────────
+  const sc=el("div","card anim");sc.style.cssText="padding:20px 18px;margin-bottom:8px";
+  const srow=el("div","flex aic gap12");
+  // status dot + label
+  const dotWrap=el("div");dotWrap.style.cssText="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1";
+  const dot=el("div");dot.id="bDot";dot.style.cssText="width:12px;height:12px;border-radius:50%;background:var(--rd);box-shadow:0 0 0 0 rgba(240,96,128,0);transition:background .4s,box-shadow .4s;align-self:center";
+  const dotLbl=el("div");dotLbl.id="bStatusDesc";dotLbl.style.cssText="font-size:11px;color:var(--dim);white-space:nowrap";dotLbl.textContent="Ellenőrzés...";
+  dotWrap.appendChild(dot);dotWrap.appendChild(dotLbl);
+  // main button
+  const stBtn=el("button","btn");stBtn.id="bToggleBtn";stBtn.style.cssText="font-size:18px;padding:14px 36px;font-weight:800;letter-spacing:.5px;flex:2";
   stBtn.textContent="...";
   stBtn.addEventListener("click",async()=>{
     if(S.bridge.running){
+      stBtn.textContent="⏳";stBtn.disabled=true;
       await api("/api/bridge/stop",{method:"POST"});
     }else{
+      stBtn.textContent="⏳";stBtn.disabled=true;
       const r=await api("/api/bridge/start",{method:"POST"});
-      if(r.error){alert(r.error);return;}
+      if(r.error){alert(r.error);stBtn.disabled=false;return;}
     }
-    setTimeout(refreshBridgeStatus,600);
+    setTimeout(refreshBridgeStatus,700);
   });
-  srow2.appendChild(stTxt);srow2.appendChild(stBtn);sc.appendChild(srow2);
+  srow.appendChild(dotWrap);srow.appendChild(stBtn);sc.appendChild(srow);
   m.appendChild(sc);
 
   async function refreshBridgeStatus(){
@@ -1207,48 +1341,62 @@ async function renderBridge(m){
     S.bridge.running=r.running;
     const desc=document.getElementById("bStatusDesc");
     const btn=document.getElementById("bToggleBtn");
-    if(desc)desc.textContent=r.running?`Fut — PID ${r.pid}`:"Leállítva";
-    if(btn){btn.textContent=r.running?"⏹ Stop":"▶ Start";
-      btn.style.background=r.running?"rgba(240,96,128,.12)":"rgba(82,227,176,.12)";
-      btn.style.border=r.running?"1px solid rgba(240,96,128,.3)":"1px solid rgba(82,227,176,.3)";
-      btn.style.color=r.running?"var(--rd)":"var(--gn)";}
+    const dot=document.getElementById("bDot");
+    const run=r.running;
+    if(desc)desc.textContent=run?`Fut — PID ${r.pid}`:"Leállítva";
+    if(btn){btn.disabled=false;btn.textContent=run?"⏹  Stop":"▶  Start";
+      btn.style.background=run?"rgba(240,96,128,.13)":"rgba(82,227,176,.13)";
+      btn.style.border=run?"1px solid rgba(240,96,128,.35)":"1px solid rgba(82,227,176,.35)";
+      btn.style.color=run?"var(--rd)":"var(--gn)";}
+    if(dot){dot.style.background=run?"var(--gn)":"var(--rd)";
+      dot.style.boxShadow=run?"0 0 8px 2px rgba(82,227,176,.35)":"0 0 0 0 transparent";}
   }
   refreshBridgeStatus();
 
-  // .env editor
-  const envCard=el("div","card anim");envCard.style.animationDelay="60ms";
-  const envHdr=el("div","sl");envHdr.textContent="Bridge paraméterek (.env)";envCard.appendChild(envHdr);
-
+  // ── Config (collapsible) ─────────────────────────────────────────
   const envData=await api("/api/bridge/env");
+  const configured=!!(envData["SKYBOUND_SESSION"]&&envData["SIMBRIEF_USERNAME"]);
+
+  const cfgCard=el("div","card anim");cfgCard.style.cssText="animation-delay:60ms;padding:0;overflow:hidden";
+  const cfgHdr=el("div","flex aic jb");cfgHdr.style.cssText="cursor:pointer;user-select:none;padding:11px 15px";
+  const cfgTitle=el("div");cfgTitle.style.cssText="font-size:12px;font-weight:700;color:var(--tx)";cfgTitle.textContent="Beállítások";
+  const cfgArrow=el("span");cfgArrow.style.cssText="color:var(--dim);font-size:14px;transition:transform .25s";cfgArrow.textContent="›";
+  cfgHdr.appendChild(cfgTitle);cfgHdr.appendChild(cfgArrow);cfgCard.appendChild(cfgHdr);
+
+  const cfgBody=el("div");cfgBody.style.cssText="padding:0 15px 14px;border-top:1px solid var(--line)";
+  cfgBody.style.display=configured?"none":"block";
+  cfgArrow.style.transform=configured?"":"rotate(90deg)";
+  cfgHdr.addEventListener("click",()=>{
+    const open=cfgBody.style.display!=="none";
+    cfgBody.style.display=open?"none":"block";
+    cfgArrow.style.transform=open?"":"rotate(90deg)";
+  });
+
   const fields=[
-    {key:"SKYBOUND_SESSION",label:"Session kód (Host ID)",placeholder:"pl. ddnemet-host",w:"100%"},
-    {key:"SIMBRIEF_USERNAME",label:"SimBrief usernév",placeholder:"pl. ddnemet",w:"100%"},
+    {key:"SKYBOUND_SESSION",label:"Session kód",placeholder:"egyedi azonosító (pl. pilotID-host)"},
+    {key:"SIMBRIEF_USERNAME",label:"SimBrief usernév",placeholder:"SimBrief pilotID"},
   ];
   const vals={};
   fields.forEach(f=>{
-    const row=el("div");row.style.marginBottom="10px";
-    const lbl=el("label");lbl.style.cssText="font-size:10px;color:var(--dim);display:block;margin-bottom:4px";lbl.textContent=f.label;
-    const inp=el("input","inp");inp.style.width=f.w;inp.value=envData[f.key]||"";inp.placeholder=f.placeholder;
-    vals[f.key]=inp;
-    row.appendChild(lbl);row.appendChild(inp);envCard.appendChild(row);
+    const row=el("div");row.style.cssText="margin-top:10px";
+    const lbl=el("label");lbl.style.cssText="font-size:10px;color:var(--dim);display:block;margin-bottom:3px";lbl.textContent=f.label;
+    const inp=el("input","inp");inp.style.width="100%";inp.value=envData[f.key]||"";inp.placeholder=f.placeholder;
+    vals[f.key]=inp;row.appendChild(lbl);row.appendChild(inp);cfgBody.appendChild(row);
   });
 
-  // SIM_MODE select
-  const modeRow=el("div");modeRow.style.marginBottom="10px";
-  const modeLbl=el("label");modeLbl.style.cssText="font-size:10px;color:var(--dim);display:block;margin-bottom:4px";modeLbl.textContent="Szimulátor mód";
+  const modeRow=el("div");modeRow.style.cssText="margin-top:10px";
+  const modeLbl=el("label");modeLbl.style.cssText="font-size:10px;color:var(--dim);display:block;margin-bottom:3px";modeLbl.textContent="Szimulátor mód";
   const modeSel=el("select","inp");modeSel.style.width="100%";
-  [["auto","Auto (FSUIPC → SimConnect)"],["simconnect","SimConnect"],["fsuipc","FSUIPC7"]].forEach(([v,l])=>{
+  [["auto","Auto"],["simconnect","SimConnect"],["fsuipc","FSUIPC7"]].forEach(([v,l])=>{
     const o=el("option");o.value=v;o.textContent=l;if((envData["SIM_MODE"]||"auto")===v)o.selected=true;modeSel.appendChild(o);
   });
-  modeRow.appendChild(modeLbl);modeRow.appendChild(modeSel);envCard.appendChild(modeRow);
+  modeRow.appendChild(modeLbl);modeRow.appendChild(modeSel);cfgBody.appendChild(modeRow);
 
-  const saveRow=el("div","flex aic gap8");saveRow.style.marginTop="4px";
-  const saveBtn=el("button","btn btn-cy");saveBtn.style.cssText="font-size:11px;padding:7px 16px";saveBtn.textContent="💾 Mentés";
-  const savedMsg=el("span");savedMsg.style.cssText="font-size:10px;color:var(--gn);opacity:0;transition:opacity 0.4s";savedMsg.textContent="✓ Elmentve";
+  const saveRow=el("div","flex aic gap8");saveRow.style.marginTop="12px";
+  const saveBtn=el("button","btn btn-cy");saveBtn.style.cssText="font-size:11px;padding:7px 18px";saveBtn.textContent="Mentés";
+  const savedMsg=el("span");savedMsg.style.cssText="font-size:10px;color:var(--gn);opacity:0;transition:opacity .4s";savedMsg.textContent="✓ Elmentve";
   saveBtn.addEventListener("click",async()=>{
-    const data={};
-    fields.forEach(f=>{data[f.key]=vals[f.key].value;});
-    data["SIM_MODE"]=modeSel.value;
+    const data={};fields.forEach(f=>{data[f.key]=vals[f.key].value;});data["SIM_MODE"]=modeSel.value;
     const r=await api("/api/bridge/env",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
     if(r.error){alert("Hiba: "+r.error);return;}
     savedMsg.style.opacity="1";setTimeout(()=>{savedMsg.style.opacity="0";},2000);
@@ -1257,87 +1405,29 @@ async function renderBridge(m){
       setTimeout(async()=>{await api("/api/bridge/start",{method:"POST"});setTimeout(refreshBridgeStatus,600);},500);
     }
   });
-  saveRow.appendChild(saveBtn);saveRow.appendChild(savedMsg);envCard.appendChild(saveRow);
-  m.appendChild(envCard);
+  saveRow.appendChild(saveBtn);saveRow.appendChild(savedMsg);cfgBody.appendChild(saveRow);
+  cfgCard.appendChild(cfgBody);m.appendChild(cfgCard);
 
-  // Log
-  const logCard=el("div","card anim");logCard.style.animationDelay="120ms";
-  const logHdr=el("div","flex aic jb");logHdr.style.marginBottom="8px";
-  const logTitle=el("div","sl");logTitle.style.marginBottom="0";logTitle.textContent="Bridge log";
-  const logRefBtn=el("button","btn btn-dk");logRefBtn.style.cssText="font-size:10px;padding:4px 10px";logRefBtn.textContent="↺ Frissít";
-  logHdr.appendChild(logTitle);logHdr.appendChild(logRefBtn);logCard.appendChild(logHdr);
-  const logBox=el("div");logBox.style.cssText="font-family:var(--mono);font-size:10px;color:var(--dim);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 10px;min-height:60px;max-height:180px;overflow-y:auto;line-height:1.6;white-space:pre-wrap";
+  // ── Log (collapsible, collapsed by default) ─────────────────────
+  const logCard=el("div","card anim");logCard.style.cssText="animation-delay:100ms;padding:0;overflow:hidden";
+  const logHdr=el("div","flex aic jb");logHdr.style.cssText="cursor:pointer;user-select:none;padding:11px 15px";
+  const logTitle=el("div");logTitle.style.cssText="font-size:12px;font-weight:700;color:var(--tx)";logTitle.textContent="Log";
+  const logArrow=el("span");logArrow.style.cssText="color:var(--dim);font-size:14px;transition:transform .25s";logArrow.textContent="›";
+  logHdr.appendChild(logTitle);logHdr.appendChild(logArrow);logCard.appendChild(logHdr);
+  const logBody=el("div");logBody.style.cssText="display:none;padding:0 12px 12px;border-top:1px solid var(--line)";
+  logHdr.addEventListener("click",()=>{
+    const open=logBody.style.display!=="none";
+    logBody.style.display=open?"none":"block";
+    logArrow.style.transform=open?"":"rotate(90deg)";
+    if(!open)refreshLog();
+  });
+  const logBox=el("div");logBox.style.cssText="font-family:var(--mono);font-size:10px;color:var(--dim);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 10px;min-height:44px;max-height:160px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;margin-top:10px";
   logBox.textContent="—";
-  async function refreshLog(){
-    const r=await api("/api/bridge/log");
-    logBox.textContent=r.log||"(üres)";
-  }
+  const logRefBtn=el("button","btn btn-dk");logRefBtn.style.cssText="font-size:10px;padding:4px 10px;margin-top:7px";logRefBtn.textContent="↺ Frissít";
+  async function refreshLog(){const r=await api("/api/bridge/log");logBox.textContent=r.log||"(üres)";}
   logRefBtn.addEventListener("click",refreshLog);
-  if(S.bridge.running)refreshLog();
-  logCard.appendChild(logBox);m.appendChild(logCard);
-
-  // Tutorial
-  const tutCard=el("div","card anim");tutCard.style.animationDelay="180ms";tutCard.style.borderColor="rgba(94,200,255,.07)";
-  const tutHdr=el("div","flex aic jb");tutHdr.style.cssText="cursor:pointer;user-select:none";
-  const tutTitle=el("div");tutTitle.innerHTML=`<div class='sl' style='margin-bottom:0'>Beállítási útmutató</div>`;
-  const tutArrow=el("span");tutArrow.style.cssText="color:var(--dim);font-size:14px;transition:transform 0.3s";tutArrow.textContent="›";
-  tutHdr.appendChild(tutTitle);tutHdr.appendChild(tutArrow);tutCard.appendChild(tutHdr);
-  const tutBody=el("div");tutBody.style.cssText="display:none;margin-top:14px";
-  const steps=[
-    ["1","Node.js telepítése",
-      "Töltsd le és telepítsd a Node.js LTS verzióját: <b>nodejs.org</b> → LTS gomb. Telepítés után nyiss egy terminált és ellenőrizd:<br><code style='color:var(--cy)'>node --version</code><br>Ha verziószámot ír ki (pl. v20.x.x), rendben van."],
-
-    ["2","Firebase service account elhelyezése",
-      "A bridge-nek szüksége van a Firebase admin kulcsra. A fájl neve: <code style='color:var(--cy)'>serviceAccount.json</code><br>"+
-      "Helyezd el ide: <code style='color:var(--cy)'>C:\\Program Files\\Xdeck EFB\\bridge\\serviceAccount.json</code><br>"+
-      "<b style='color:var(--am)'>⚠ Ezt a fájlt ne oszd meg senkivel — teljes admin hozzáférést ad a Firebase-hez.</b><br><br>"+
-      "Ha elveszett vagy nincs meg: Firebase Console → fogaskerék → <b>Project Settings → Service accounts → Generate new private key</b> → letölt egy JSON fájlt → nevezd át <code style='color:var(--cy)'>serviceAccount.json</code>-ra."],
-
-    ["3","Bridge paraméterek beállítása",
-      "Az oldal tetején lévő <b>Bridge paraméterek</b> szekcióban töltsd ki:<br>"+
-      "• <b>Session kód:</b> egyedi azonosító, pl. <code style='color:var(--cy)'>ddnemet-host</code> — ezt kell megadnod a mobil appban is<br>"+
-      "• <b>SimBrief usernév:</b> a SimBrief pilotID-d (Dispatch.simbrief.com → My Account)<br>"+
-      "• <b>Service account útvonal:</b> <code style='color:var(--cy)'>./serviceAccount.json</code> (ha a bridge mappában van)<br>"+
-      "• <b>Szimulátor mód:</b> Auto — először ezt próbáld, FSUIPC7-et csak akkor válassz ha az van<br>"+
-      "Kattints <b>💾 Mentés</b>."],
-
-    ["4","Bridge indítása és ellenőrzés",
-      "Kattints a <b>▶ Start</b> gombra. A státusz zöldre vált és kiírja a PID számot.<br>"+
-      "Ha hiba jelenik meg:<br>"+
-      "• <code style='color:var(--rd)'>node not found</code> → Node.js nincs telepítve vagy nincs PATH-ban<br>"+
-      "• <code style='color:var(--rd)'>.env fájl hiányzik</code> → mentsd el a paramétereket előbb<br>"+
-      "• <code style='color:var(--rd)'>serviceAccount error</code> → a JSON fájl nem ott van ahol megadtad<br>"+
-      "• <code style='color:var(--rd)'>SimConnect error</code> → MSFS nincs futva vagy SimConnect nincs engedélyezve<br>"+
-      "A log szekcióban (↺ Frissít) látod a részleteket."],
-
-    ["5","Mobil app csatlakoztatása",
-      "Android appban → <b>Settings</b>:<br>"+
-      "① <b>Session kód</b>: ugyanaz mint amit a bridge paraméterekben megadtál<br>"+
-      "② <b>SimBrief usernév</b>: ugyanaz<br>"+
-      "③ <b>Push értesítések</b>: Be<br>"+
-      "Ha a bridge fut és a session kód egyezik, a Home képernyőn megjelenik a <b>LIVE</b> jelzés és a valós idejű adatok."],
-
-    ["6","Push értesítések — Alerts beállítása",
-      "Desktop appban → <b>Alerts</b> fül. Háromféle trigger van:<br>"+
-      "• <b>Fix crossing</b>: megadsz egy waypoint nevet (pl. BATOX) és hány perccel előtte küldjön értesítést<br>"+
-      "• <b>T/D (Top of Descent)</b>: N perccel az ereszkedés kezdete előtt<br>"+
-      "• <b>Landing</b>: N perccel a célállomás előtt<br>"+
-      "A trigger arméd állapotba kerül → a bridge figyeli → mikor teljesül a feltétel, FCM push megy a telefonra (hang + vibráció)."],
-  ];
-  steps.forEach(([n,title,desc])=>{
-    const row=el("div");row.style.cssText="display:flex;gap:12px;margin-bottom:14px";
-    const num=el("div");num.style.cssText="width:22px;height:22px;border-radius:50%;background:rgba(94,200,255,.1);border:1px solid rgba(94,200,255,.2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--cy);flex-shrink:0;align-self:flex-start;margin-top:2px";num.textContent=n;
-    const txt=el("div");txt.style.flex="1";
-    txt.innerHTML=`<div style='font-size:12px;font-weight:600;color:var(--tx);margin-bottom:3px'>${title}</div><div style='font-size:11px;color:var(--dim);line-height:1.6'>${desc}</div>`;
-    row.appendChild(num);row.appendChild(txt);tutBody.appendChild(row);
-  });
-  tutCard.appendChild(tutBody);
-  tutHdr.addEventListener("click",()=>{
-    const open=tutBody.style.display!=="none";
-    tutBody.style.display=open?"none":"block";
-    tutArrow.style.transform=open?"":"rotate(90deg)";
-  });
-  m.appendChild(tutCard);
+  logBody.appendChild(logBox);logBody.appendChild(logRefBtn);logCard.appendChild(logBody);
+  m.appendChild(logCard);
 }
 
 // ── DEV PANEL ─────────────────────────────────────────────────────
@@ -1452,7 +1542,7 @@ function renderSettings(m){
 
   // 2. SimBrief
   const sbRow=el("div","flex gap8 aic");
-  const sbInp=textInp(cfg.sbUser||"","pl. ddnemet","160px",v=>{S.cfg.sbUser=v;saveCfg();});
+  const sbInp=textInp(cfg.sbUser||"","SimBrief Pilot ID","160px",v=>{S.cfg.sbUser=v;saveCfg();});
   const sbBtn=el("button","btn btn-cy");sbBtn.style.cssText="font-size:11px;padding:6px 12px";sbBtn.textContent="Betölt";
   sbBtn.addEventListener("click",()=>{S.cfg.sbUser=sbInp.value;loadOFP(sbInp.value);});
   sbRow.appendChild(sbInp);sbRow.appendChild(sbBtn);
@@ -1464,7 +1554,7 @@ function renderSettings(m){
 
   // 4. Session kód
   srow("Session kód","Firebase sync azonosító",
-    textInp(cfg.sessionCode||"","ddnemet-host","160px",v=>{S.cfg.sessionCode=v;saveCfg();connectRTDB();}));
+    textInp(cfg.sessionCode||"","pl. pilota-host","160px",v=>{S.cfg.sessionCode=v;saveCfg();connectRTDB();}));
 
   // 5. OFP megjelenítés
   srow("OFP megjelenítés","Simplified vagy valódi SimBrief doc",
