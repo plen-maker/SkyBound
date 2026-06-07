@@ -24,15 +24,11 @@ if (!SESSION) {
 function findServiceAccount() {
   const candidates = [
     process.env.FIREBASE_SERVICE_ACCOUNT,
-    // exe mellé rakva (pkg bundle)
     process.execPath ? path.join(path.dirname(process.execPath), "serviceAccount.json") : null,
-    // script mellé rakva (dev)
     path.join(path.dirname(fileURLToPath(import.meta.url)), "../../serviceAccount.json"),
     path.join(path.dirname(fileURLToPath(import.meta.url)), "../serviceAccount.json"),
     path.join(path.dirname(fileURLToPath(import.meta.url)), "serviceAccount.json"),
-    // munkakönyvtárban
     path.join(process.cwd(), "serviceAccount.json"),
-    // standard install hely
     "C:\\Program Files\\Xdeck EFB\\bridge\\serviceAccount.json",
   ].filter(Boolean);
 
@@ -42,19 +38,22 @@ function findServiceAccount() {
       return p;
     }
   }
-  console.error("[fb] serviceAccount.json nem található. Helyezd az exe mellé vagy add meg FIREBASE_SERVICE_ACCOUNT a .env-ben.");
-  process.exit(1);
+  return null;
 }
 
 const SVC = findServiceAccount();
+const OFFLINE = !SVC;
+if (OFFLINE) {
+  console.warn("[bridge] serviceAccount.json not found — offline mode (no Firebase sync, no push)");
+}
 
 let ofp = null, triggers = [];
 const engine = createEngine();
 
 // Clear live data on exit
 async function onExit() {
-  console.log("[bridge] kilépés — live adatok törlése...");
-  try { await clearLive(SESSION); } catch {}
+  console.log("[bridge] kilépés...");
+  if (!OFFLINE) try { await clearLive(SESSION); } catch {}
   process.exit(0);
 }
 process.on("SIGINT",  onExit);
@@ -89,7 +88,7 @@ function handleTelemetry(telemetry) {
       aircraftTitle: telemetry.aircraftTitle,
       ts:           now,
     };
-    writeLanding(SESSION, landing).catch(() => {});
+    if (!OFFLINE) writeLanding(SESSION, landing).catch(() => {});
     console.log(`[landing] Touchdown: ${landing.fpm} FPM @ ${landing.gs} kt GS, IAS ${landing.ias} kt`);
   }
   prevOnGround = telemetry.onGround;
@@ -100,10 +99,12 @@ function handleTelemetry(telemetry) {
     todDistNm: todDistanceNm(telemetry.altFt, 0),
     ofp: ofp && { dep:ofp.dep, arr:ofp.arr, pax:ofp.pax, payload:ofp.payload, blockFuel:ofp.blockFuel, units:ofp.units, route:ofp.route },
   };
-  writeLive(SESSION, telemetry, derived).catch(() => {});
-  const events = engine.evaluate(telemetry, triggers, ofp);
-  for (const ev of events)
-    pushToDevices(SESSION, { title: ev.title, body: ev.body }).catch(() => {});
+  if (!OFFLINE) {
+    writeLive(SESSION, telemetry, derived).catch(() => {});
+    const events = engine.evaluate(telemetry, triggers, ofp);
+    for (const ev of events)
+      pushToDevices(SESSION, { title: ev.title, body: ev.body }).catch(() => {});
+  }
 }
 
 // Watchdog: clear live data if no telemetry for 15s
@@ -111,15 +112,17 @@ setInterval(async () => {
   if (lastDataTs > 0 && Date.now() - lastDataTs > DATA_TIMEOUT_MS) {
     console.warn("[bridge] Nincs adat 15s óta — live adatok törlése");
     lastDataTs = 0;
-    try { await clearLive(SESSION); } catch {}
+    if (!OFFLINE) try { await clearLive(SESSION); } catch {}
   }
 }, 5000);
 
 async function main() {
-  initFirebase(SVC);
+  if (!OFFLINE) {
+    initFirebase(SVC);
+    watchTriggers(SESSION, t => { triggers = t; });
+  }
   await loadOFP();
   setInterval(loadOFP, 5 * 60 * 1000);
-  watchTriggers(SESSION, t => { triggers = t; });
 
   if (SIM_MODE === "fsuipc7") {
     console.log("[bridge] Mode: FSUIPC7");
