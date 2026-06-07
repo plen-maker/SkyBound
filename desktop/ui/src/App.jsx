@@ -10,7 +10,7 @@ import {
   Music, MessageCircle, Globe, Radar, Navigation2, Wifi, WifiOff,
   Plus, Trash2, Users, Weight, Fuel, ArrowDownRight,
   Loader2, AlertCircle, Gamepad2, ExternalLink,
-  Check, LogOut, Radio, Eye, EyeOff, RefreshCw,
+  Check, LogOut, Radio, Eye, EyeOff, RefreshCw, Layers,
 } from "lucide-react";
 
 /* ── PyWebView bridge ─────────────────────────────────────────── */
@@ -22,7 +22,7 @@ const py = {
     } catch(e) { console.warn("[py]", method, e); }
     return null;
   },
-  openExternal: url => py.call("open_external", url),
+  openExternal: url => fetch(`http://127.0.0.1:47821/api/open-url?url=${encodeURIComponent(url)}`).catch(()=>null),
   openInApp:    url => py.call("open_inapp", url),
   saveSettings: s   => py.call("save_settings", JSON.stringify(s)),
   loadSettings: ()  => py.call("load_settings"),
@@ -418,6 +418,7 @@ button:focus-visible { box-shadow: 0 0 0 3px rgba(94,200,255,.3); }
 const TABS = [
   { id:"home",        label:"Home",    icon:Plane },
   { id:"map",         label:"Map",     icon:MapIcon },
+  { id:"ground",      label:"Ground",  icon:Layers },
   { id:"ofp",         label:"OFP",     icon:FileText },
   { id:"vatsim",      label:"VATSIM",  icon:Radio },
   { id:"charts",      label:"Charts",  icon:MapIcon },
@@ -429,7 +430,7 @@ const TABS = [
 const SHORTCUTS = [
   { id:"fenix",     label:"Fenix EFB",  sub:"IP:8080",    icon:Plane,        color:"#5ec8ff", urlKey:"fenixUrl" },
   { id:"navigraph", label:"Navigraph",  sub:"Charts",     icon:MapIcon,      color:"#a78bfa", url:"https://charts.navigraph.com" },
-  { id:"vatsim",    label:"VATSIM",     sub:"Radar",      icon:Radar,        color:"#52e3b0", url:"https://radar.vatsim.net" },
+  { id:"vatsim",    label:"VATSIM",     sub:"Radar",      icon:Radar,        color:"#52e3b0", url:"https://radar.vatsim.net", forceExternal:true },
   { id:"simbrief",  label:"SimBrief",   sub:"Dispatch",   icon:FileText,     color:"#ffb454", url:"https://dispatch.simbrief.com" },
   { id:"spotify",   label:"Spotify",    sub:"Music",      icon:Music,        color:"#1db954", url:"https://open.spotify.com" },
   { id:"ytmusic",   label:"YT Music",   sub:"Music",      icon:Music,        color:"#ff6b6b", url:"https://music.youtube.com" },
@@ -817,6 +818,7 @@ function AppShell({ user }) {
             background:"radial-gradient(ellipse at 0 0, rgba(94,200,255,.012) 0%, transparent 45%)" }}>
           {tab==="home"        && <HomeTab live={live} ofp={ofp} shortcuts={shortcuts} inApp={inApp}/>}
           {tab==="map"         && <MapTab ofp={ofp} live={live}/>}
+          {tab==="ground"      && <GroundTab live={live} ofp={ofp}/>}
           {tab==="ofp"         && <OFPTab sbUser={settings.sbUser} setSbUser={v=>save("sbUser",v)}
                                     ofp={ofp} state={ofpState} error={ofpErr} onLoad={loadOFP}
                                     mode={settings.ofpMode} setMode={v=>save("ofpMode",v)}/>}
@@ -1000,7 +1002,7 @@ function HomeTab({live, ofp, shortcuts, inApp}) {
               style={{ opacity:s.disabled?.45:1, animationDelay:`${i*22}ms`,
                 border:"1px solid #1c2d42", background:"#0c1520",
                 cursor:s.disabled?"default":"pointer", textAlign:"left", width:"100%" }}
-              onClick={()=>!s.disabled&&openUrl(s.resolvedUrl, inApp)}>
+              onClick={()=>!s.disabled&&(s.forceExternal?py.openExternal(s.resolvedUrl):openUrl(s.resolvedUrl,inApp))}>
               <div style={{ display:"flex", alignItems:"center",
                 justifyContent:"space-between", marginBottom:8 }}>
                 <div style={{ width:32, height:32, borderRadius:9, background:"var(--p2)",
@@ -1116,6 +1118,145 @@ function MapTab({ofp, live}) {
         .leaflet-control-zoom a{background:#0d1520;color:#cdd9ec;border-color:#1c2d42;}
         .leaflet-control-zoom a:hover{background:#111c2b;}
         .lf-tip{background:#0d1520;border:1px solid #1c2d42;color:#d8e6f3;font-size:11px;padding:2px 6px;}
+      `}</style>
+    </div>
+  );
+}
+
+/* ══ GROUND MAP TAB ══════════════════════════════════════════════ */
+function GroundTab({ live, ofp }) {
+  const mapRef  = React.useRef(null);
+  const leafRef = React.useRef(null);
+  const planeRef= React.useRef(null);
+  const [following, setFollowing] = React.useState(true);
+
+  const makePlaneIcon = (L, heading) => L.divIcon({
+    html: `<div id="gnd-plane" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;transform:rotate(${heading}deg);transition:transform .25s linear;">
+      <svg viewBox="0 0 32 32" width="32" height="32">
+        <path d="M16 3 L20 29 L16 24 L12 29 Z" fill="#5ec8ff" stroke="#fff" stroke-width="1.2"/>
+        <rect x="5" y="14" width="22" height="4" rx="2" fill="#5ec8ff" opacity=".75"/>
+        <rect x="10" y="22" width="12" height="3" rx="1.5" fill="#5ec8ff" opacity=".5"/>
+        <circle cx="16" cy="16" r="2.5" fill="#fff" opacity=".9"/>
+      </svg>
+    </div>`,
+    iconSize: [32, 32], iconAnchor: [16, 16], className: "",
+  });
+
+  React.useEffect(() => {
+    if (!document.getElementById("lf-css")) {
+      const l = document.createElement("link"); l.id = "lf-css";
+      l.rel = "stylesheet"; l.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(l);
+    }
+    const init = () => {
+      if (!mapRef.current || leafRef.current) return;
+      const L = window.L;
+      const center = live ? [live.lat, live.lon] : [47.4338, 19.2613];
+      const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false }).setView(center, 17);
+      leafRef.current = map;
+
+      // Satellite base
+      L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        { maxZoom: 20 }
+      ).addTo(map);
+
+      // OSM overlay — taxiway labels + layout
+      L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        { maxZoom: 20, opacity: 0.38 }
+      ).addTo(map);
+
+      if (live) {
+        planeRef.current = L.marker([live.lat, live.lon], {
+          icon: makePlaneIcon(L, live.headingDeg || 0),
+          zIndexOffset: 1000,
+        }).addTo(map);
+      }
+
+      // Stop following when user drags
+      map.on("mousedown touchstart", () => setFollowing(false));
+    };
+
+    if (window.L) init();
+    else {
+      const s = document.createElement("script");
+      s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      s.onload = init; document.head.appendChild(s);
+    }
+    return () => { if (leafRef.current) { leafRef.current.remove(); leafRef.current = null; planeRef.current = null; } };
+  }, []);
+
+  // Live position + heading update
+  React.useEffect(() => {
+    if (!leafRef.current || !live) return;
+    const L = window.L;
+    const pos = [live.lat, live.lon];
+    const heading = live.headingDeg || 0;
+    if (planeRef.current) {
+      planeRef.current.setLatLng(pos);
+      // Smooth heading via DOM
+      const el = planeRef.current.getElement?.();
+      const inner = el?.querySelector("#gnd-plane");
+      if (inner) inner.style.transform = `rotate(${heading}deg)`;
+    } else if (L && leafRef.current) {
+      planeRef.current = L.marker(pos, {
+        icon: makePlaneIcon(L, heading), zIndexOffset: 1000,
+      }).addTo(leafRef.current);
+    }
+    if (following) leafRef.current.setView(pos);
+  }, [live?.lat, live?.lon, live?.headingDeg, following]);
+
+  const recenter = () => {
+    setFollowing(true);
+    if (live && leafRef.current) leafRef.current.setView([live.lat, live.lon], 17);
+  };
+
+  return (
+    <div style={{ position:"relative", borderRadius:14, overflow:"hidden",
+      border:"1px solid var(--line)", height:"calc(100vh - 110px)" }}>
+      <div ref={mapRef} style={{ width:"100%", height:"100%" }}/>
+
+      {/* HUD overlay */}
+      {live && (
+        <div style={{ position:"absolute", top:12, left:12, zIndex:1000,
+          background:"rgba(7,11,18,.82)", border:"1px solid #1c2d42",
+          borderRadius:10, padding:"7px 12px", fontSize:11, color:"#d8e6f3",
+          display:"flex", flexDirection:"column", gap:4, pointerEvents:"none",
+          backdropFilter:"blur(6px)" }}>
+          <div style={{ fontWeight:700, fontSize:10, letterSpacing:1.1, color:"var(--cy)" }}>
+            {live.onGround ? "ON GROUND" : "AIRBORNE"}
+          </div>
+          {live.gsKt != null && <div>GS <b>{Math.round(live.gsKt)} kt</b></div>}
+          {live.headingDeg != null && <div>HDG <b>{Math.round(live.headingDeg)}°</b></div>}
+          {!live.onGround && live.altFt != null && <div>ALT <b>{Math.round(live.altFt).toLocaleString()} ft</b></div>}
+        </div>
+      )}
+
+      {/* Re-center button */}
+      {!following && live && (
+        <button onClick={recenter}
+          style={{ position:"absolute", bottom:20, right:20, zIndex:1000,
+            background:"#0d1520", border:"1px solid var(--cy)", color:"var(--cy)",
+            borderRadius:8, padding:"6px 14px", fontSize:11, fontWeight:600,
+            cursor:"pointer", backdropFilter:"blur(6px)" }}>
+          ⊕ Re-center
+        </button>
+      )}
+
+      {/* No live data notice */}
+      {!live && (
+        <div style={{ position:"absolute", bottom:20, left:"50%", transform:"translateX(-50%)",
+          zIndex:1000, background:"rgba(7,11,18,.82)", border:"1px solid #1c2d42",
+          borderRadius:8, padding:"6px 14px", fontSize:11, color:"var(--dim)" }}>
+          Bridge nincs csatlakoztatva — nincs élő pozíció
+        </div>
+      )}
+
+      <style>{`
+        .leaflet-container{background:#06090f;font-family:var(--font);}
+        .leaflet-control-zoom a{background:#0d1520;color:#cdd9ec;border-color:#1c2d42;}
+        .leaflet-control-zoom a:hover{background:#111c2b;}
       `}</style>
     </div>
   );
@@ -1426,8 +1567,8 @@ function ChartsTab({ofp}) {
   useEffect(()=>{ if(ofp?.arr&&!icao) setIcao(ofp.arr); },[ofp]);
 
   const PROVIDERS = [
-    { id:"lido",      name:"MSFS Flight Planner", desc:"Microsoft Lido chartok — beépített MSFS", url:()=>"https://planner.flightsimulator.com/",  color:"var(--cy)", badge:"MSFS" },
-    { id:"navigraph", name:"Navigraph Charts",    desc:"Jeppesen-stílusú chartok",               url:()=>"https://charts.navigraph.com",          color:"var(--pu)", badge:"Előfizetéses" },
+    { id:"lido",      name:"MSFS Flight Planner", desc:"Microsoft Lido chartok — beépített MSFS", url:()=>"https://planner.flightsimulator.com/",  color:"var(--cy)", badge:"MSFS",         external:true },
+    { id:"navigraph", name:"Navigraph Charts",    desc:"Jeppesen-stílusú chartok",               url:()=>"https://charts.navigraph.com",          color:"var(--pu)", badge:"Előfizetéses", external:false },
   ];
   const quickIcaos=[ofp?.dep,ofp?.arr,ofp?.altn].filter(Boolean);
 
@@ -1462,7 +1603,7 @@ function ChartsTab({ofp}) {
           <button key={p.id} className={`tile-chart anim-up`}
             style={{ animationDelay:`${i*40}ms`, border:"none", cursor:"pointer",
               textAlign:"left", width:"100%" }}
-            onClick={()=>py.openInApp(p.url(icao))}>
+            onClick={()=>p.external?py.openExternal(p.url(icao)):py.openInApp(p.url(icao))}>
             <div style={{ display:"flex", alignItems:"flex-start",
               justifyContent:"space-between", marginBottom:10 }}>
               <div style={{ width:34, height:34, borderRadius:9, background:"var(--p2)",

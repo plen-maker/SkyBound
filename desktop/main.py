@@ -114,6 +114,22 @@ def spawn():
         f.write(flt_path)
     return jsonify({"ok": True, "path": flt_path})
 
+@app.route("/api/airport")
+def airport():
+    icao = request.args.get("icao","").upper()
+    if not icao: return jsonify({"error":"Nincs ICAO"})
+    try:
+        r = req.get(
+            f"https://aviationweather.gov/api/data/airport?ids={icao}&format=json",
+            timeout=8, headers={"Accept":"application/json"}
+        )
+        data = r.json()
+        if not data:
+            return jsonify({"error": f"Nem található: {icao}"})
+        return jsonify(data[0])
+    except Exception as e:
+        return jsonify({"error":str(e)})
+
 @app.route("/api/metar")
 def metar():
     icao = request.args.get("icao","").upper()
