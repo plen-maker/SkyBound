@@ -428,7 +428,7 @@ const S={
     devMode:false, codename:"Sequoia", version:"0.1.0", channel:"release",
   },
   ofp:null, ofpRaw:null, live:null, rtdb:false, bridge:{running:false, loading:false, err:''},
-  triggers:[], vd:null,
+  triggers:[], vd:null, landing:null,
   ofpLoading:false, ofpErr:"",
 };
 
@@ -579,6 +579,9 @@ function connectRTDB(){
   const r3=db.ref("sessions/"+sc+"/triggers");
   r3.on("value",s=>{const v=s.val();S.triggers=v?Object.entries(v).map(([id,d])=>({id,...d})):[];if(S.tab==="alerts")renderTab();},()=>{});
   _uns.push(()=>r3.off());
+  const r4=db.ref("sessions/"+sc+"/lastLanding");
+  r4.on("value",s=>{S.landing=s.val();if(S.tab==="landing")renderTab();},()=>{});
+  _uns.push(()=>r4.off());
 }
 
 // ── Bar ────────────────────────────────────────────────────────────
@@ -609,6 +612,7 @@ const TABS=[
   {id:"alerts",l:"Alerts",svg:"<path d='M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9'/><path d='M13.73 21a2 2 0 0 1-3.46 0'/>"},
   {id:"ctrl",l:"Ctrl",svg:"<rect x='2' y='6' width='20' height='12' rx='2'/><path d='M12 12h.01'/><path d='M17 12h.01'/><path d='M7 12h.01'/>"},
   {id:"bridge",l:"Bridge",svg:"<path d='M18 20V10'/><path d='M12 20V4'/><path d='M6 20v-6'/>"},
+  {id:"landing",l:"Landing",svg:"<path d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.38 2 2 0 0 1 3.59 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.14 6.14l1.92-1.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z'/>"},
   {id:"settings",l:"Settings",svg:"<circle cx='12' cy='12' r='3'/><path d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z'/>"},
 ];
 
@@ -631,12 +635,15 @@ function navTo(tab){S.tab=tab;renderSidebar();renderTab();}
 
 function renderTab(){
   const m=$("main");if(!m)return;
-  if(S.tab==="map"&&$("leafletMap"))return;
+  if(S.tab==="map"&&$("mapModeBar"))return;
+  // Remove map mode bar when leaving map tab
+  const oldModeBar=document.getElementById("mapModeBar");if(oldModeBar&&S.tab!=="map")oldModeBar.remove();
   if(S.tab!=="map")window._lfMap=null;
   m.innerHTML="";m.style.padding="20px 22px";m.style.overflow="auto";
   m.style.display="";m.style.alignItems="";m.style.justifyContent="";m.style.flexDirection="";m.style.minHeight="0";
   ({home:renderHome,map:renderMap,metar:renderMetar,ofp:renderOFP,vatsim:renderVatsim,
-    charts:renderCharts,alerts:renderAlerts,ctrl:renderCtrl,bridge:renderBridge,settings:renderSettings})[S.tab]?.(m);
+    charts:renderCharts,alerts:renderAlerts,ctrl:renderCtrl,bridge:renderBridge,
+    landing:renderLanding,settings:renderSettings})[S.tab]?.(m);
 }
 
 // ── HOME ───────────────────────────────────────────────────────────
@@ -729,39 +736,90 @@ function renderHome(m){
 // ── MAP ────────────────────────────────────────────────────────────
 function renderMap(m){
   m.style.padding="0";m.style.overflow="hidden";
-  const d=el("div");d.id="leafletMap";d.style.cssText="width:100%;height:calc(100vh - 50px)";m.appendChild(d);
+  // Mode bar
+  const modeBar=el("div");modeBar.id="mapModeBar";
+  modeBar.style.cssText="position:absolute;top:58px;left:calc(var(--sidebar)+8px);z-index:999;display:flex;gap:5px;padding:5px";
+  const modes=[["satellite","Satellite"],["street","Street"],["vatsim","VATSIM Radar"]];
+  const mapStyle=S.cfg.mapStyle||"satellite";
+  modes.forEach(([v,l])=>{
+    const b=el("button","pill"+(mapStyle===v?" on":""));
+    b.textContent=l;b.style.cssText="font-size:10px;cursor:pointer;backdrop-filter:blur(10px);background:rgba(8,9,14,.75)";
+    b.addEventListener("click",()=>{
+      S.cfg.mapStyle=v;saveCfg();
+      // Update button states
+      modeBar.querySelectorAll("button").forEach((btn,i)=>btn.classList.toggle("on",modes[i][0]===v));
+      _applyMapMode(v);
+    });
+    modeBar.appendChild(b);
+  });
+  document.body.appendChild(modeBar);
+
+  // Leaflet container
+  const lc=el("div");lc.id="leafletMap";lc.style.cssText="width:100%;height:calc(100vh - 50px)";
+  // VATSIM iframe container
+  const vc=el("div");vc.id="vatsimMapCont";vc.style.cssText="width:100%;height:calc(100vh - 50px);display:none";
+  const vfr=el("iframe");vfr.id="vatsimMapIframe";vfr.style.cssText="width:100%;height:100%;border:none";
+  vfr.src="about:blank";vc.appendChild(vfr);
+  m.appendChild(lc);m.appendChild(vc);
+
+  if(mapStyle==="vatsim"){
+    lc.style.display="none";vc.style.display="block";
+    vfr.src="https://map.vatsim.net";
+  } else {
+    _initLeaflet(mapStyle);
+  }
+
   if(!document.getElementById("lf-css")){
     const l=document.createElement("link");l.id="lf-css";l.rel="stylesheet";
     l.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(l);}
-  const init=()=>{
-    if(window._lfMap)return;
-    const fixes=(S.ofp?.fixes||[]).filter(f=>f.lat!=null);
-    const center=S.live&&S.live.lat?[S.live.lat,S.live.lon]:fixes.length?[fixes[Math.floor(fixes.length/2)].lat,fixes[Math.floor(fixes.length/2)].lon]:[47.4,19.26];
-    const map=L.map("leafletMap",{zoomControl:true,attributionControl:false}).setView(center,7);
-    window._lfMap=map;
-    const style=S.cfg.mapStyle||"satellite";
-    if(style==="street"){
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19}).addTo(map);
-    }else{
-      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19}).addTo(map);
-      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,opacity:.6}).addTo(map);
+  if(!window.L){const s=document.createElement("script");s.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";s.onload=()=>{if(S.cfg.mapStyle!=="vatsim")_initLeaflet(S.cfg.mapStyle||"satellite");};document.head.appendChild(s);}
+}
+
+function _applyMapMode(v){
+  const lc=$("leafletMap"),vc=$("vatsimMapCont"),vfr=$("vatsimMapIframe");
+  if(v==="vatsim"){
+    if(lc)lc.style.display="none";if(vc)vc.style.display="block";
+    if(vfr&&vfr.src==="about:blank")vfr.src="https://map.vatsim.net";
+  }else{
+    if(vc)vc.style.display="none";if(lc)lc.style.display="block";
+    if(window.L&&!window._lfMap)_initLeaflet(v);
+    else if(window._lfMap){
+      window._lfMap.eachLayer(l=>{if(l instanceof L.TileLayer)window._lfMap.removeLayer(l);});
+      if(v==="street"){
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19}).addTo(window._lfMap);
+      }else{
+        L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19}).addTo(window._lfMap);
+        L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,opacity:.6}).addTo(window._lfMap);
+      }
     }
-    if(S.cfg.mapRoute&&fixes.length>1){
-      L.polyline(fixes.map(f=>[f.lat,f.lon]),{color:"#5ec8ff",weight:2,dashArray:"7,5",opacity:.7}).addTo(map);
-      fixes.forEach((f,i)=>{
-        if(!(i===0||i===fixes.length-1||i%Math.max(1,Math.floor(fixes.length/8))===0))return;
-        L.circleMarker([f.lat,f.lon],{radius:i===0||i===fixes.length-1?6:3,
-          color:i===0?"#52e3b0":i===fixes.length-1?"#f06080":"#5ec8ff",
-          fillColor:i===0?"#52e3b0":i===fixes.length-1?"#f06080":"#1a4070",fillOpacity:1,weight:2}).bindTooltip(f.ident).addTo(map);
-      });
-    }
-    if(S.live&&S.live.lat){
-      const ic=L.divIcon({html:`<svg viewBox='0 0 24 24' width='20' height='20'><path d='M12 2 L16 17 L12 13 L8 17 Z' fill='white' stroke='#5ec8ff' stroke-width='1.5'/></svg>`,iconSize:[20,20],iconAnchor:[10,10],className:""});
-      L.marker([S.live.lat,S.live.lon],{icon:ic}).addTo(map);
-    }
-  };
-  if(window.L)init();
-  else{const s=document.createElement("script");s.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";s.onload=init;document.head.appendChild(s);}
+  }
+}
+
+function _initLeaflet(style){
+  if(window._lfMap)return;
+  const fixes=(S.ofp?.fixes||[]).filter(f=>f.lat!=null);
+  const center=S.live&&S.live.lat?[S.live.lat,S.live.lon]:fixes.length?[fixes[Math.floor(fixes.length/2)].lat,fixes[Math.floor(fixes.length/2)].lon]:[47.4,19.26];
+  const map=L.map("leafletMap",{zoomControl:true,attributionControl:false}).setView(center,7);
+  window._lfMap=map;
+  if(style==="street"){
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19}).addTo(map);
+  }else{
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19}).addTo(map);
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,opacity:.6}).addTo(map);
+  }
+  if(S.cfg.mapRoute&&fixes.length>1){
+    L.polyline(fixes.map(f=>[f.lat,f.lon]),{color:"#5ec8ff",weight:2,dashArray:"7,5",opacity:.7}).addTo(map);
+    fixes.forEach((f,i)=>{
+      if(!(i===0||i===fixes.length-1||i%Math.max(1,Math.floor(fixes.length/8))===0))return;
+      L.circleMarker([f.lat,f.lon],{radius:i===0||i===fixes.length-1?6:3,
+        color:i===0?"#52e3b0":i===fixes.length-1?"#f06080":"#5ec8ff",
+        fillColor:i===0?"#52e3b0":i===fixes.length-1?"#f06080":"#1a4070",fillOpacity:1,weight:2}).bindTooltip(f.ident).addTo(map);
+    });
+  }
+  if(S.live&&S.live.lat){
+    const ic=L.divIcon({html:`<svg viewBox='0 0 24 24' width='20' height='20'><path d='M12 2 L16 17 L12 13 L8 17 Z' fill='white' stroke='#5ec8ff' stroke-width='1.5'/></svg>`,iconSize:[20,20],iconAnchor:[10,10],className:""});
+    L.marker([S.live.lat,S.live.lon],{icon:ic}).addTo(map);
+  }
 }
 
 // ── OFP ───────────────────────────────────────────────────────────
@@ -1329,12 +1387,31 @@ async function renderBridge(m){
     }else{
       stBtn.textContent="⏳";stBtn.disabled=true;
       const r=await api("/api/bridge/start",{method:"POST"});
-      if(r.error){alert(r.error);stBtn.disabled=false;return;}
+      if(r.error){
+        stBtn.disabled=false;
+        const eb=document.getElementById("bErrBanner");
+        if(eb){eb.textContent="⚠ "+r.error;eb.style.display="block";}
+        _bridgeAutoExpandLog();return;
+      }
     }
+    const eb=document.getElementById("bErrBanner");if(eb)eb.style.display="none";
     setTimeout(refreshBridgeStatus,700);
+    setTimeout(async()=>{
+      const st=await api("/api/bridge/status");
+      if(!st.running){refreshBridgeStatus();_bridgeAutoExpandLog();}
+    },1800);
   });
+  // error banner
+  const errBanner=el("div");errBanner.id="bErrBanner";
+  errBanner.style.cssText="display:none;font-size:11px;color:var(--rd);background:rgba(240,96,128,.08);border:1px solid rgba(240,96,128,.2);border-radius:8px;padding:8px 12px;margin-top:6px;line-height:1.5";
+  sc.appendChild(errBanner);
   srow.appendChild(dotWrap);srow.appendChild(stBtn);sc.appendChild(srow);
   m.appendChild(sc);
+  function _bridgeAutoExpandLog(){
+    const lb=document.getElementById("bLogBody");const la=document.getElementById("bLogArrow");
+    if(lb&&lb.style.display==="none"){lb.style.display="block";if(la)la.style.transform="rotate(90deg)";}
+    setTimeout(refreshLog,300);
+  }
 
   async function refreshBridgeStatus(){
     const r=await api("/api/bridge/status");
@@ -1412,9 +1489,9 @@ async function renderBridge(m){
   const logCard=el("div","card anim");logCard.style.cssText="animation-delay:100ms;padding:0;overflow:hidden";
   const logHdr=el("div","flex aic jb");logHdr.style.cssText="cursor:pointer;user-select:none;padding:11px 15px";
   const logTitle=el("div");logTitle.style.cssText="font-size:12px;font-weight:700;color:var(--tx)";logTitle.textContent="Log";
-  const logArrow=el("span");logArrow.style.cssText="color:var(--dim);font-size:14px;transition:transform .25s";logArrow.textContent="›";
+  const logArrow=el("span");logArrow.id="bLogArrow";logArrow.style.cssText="color:var(--dim);font-size:14px;transition:transform .25s";logArrow.textContent="›";
   logHdr.appendChild(logTitle);logHdr.appendChild(logArrow);logCard.appendChild(logHdr);
-  const logBody=el("div");logBody.style.cssText="display:none;padding:0 12px 12px;border-top:1px solid var(--line)";
+  const logBody=el("div");logBody.id="bLogBody";logBody.style.cssText="display:none;padding:0 12px 12px;border-top:1px solid var(--line)";
   logHdr.addEventListener("click",()=>{
     const open=logBody.style.display!=="none";
     logBody.style.display=open?"none":"block";
@@ -1488,6 +1565,98 @@ async function openDevPanel(){
     }catch(e){msgDiv.style.color="var(--rd)";msgDiv.textContent="Hiba: "+e.message;}
   });
   content.appendChild(pubBtn);
+}
+
+// ── LANDING ───────────────────────────────────────────────────────
+function renderLanding(m){
+  const sl=el("div","sl anim");sl.textContent="Landing Analysis";m.appendChild(sl);
+
+  if(!S.landing){
+    const empty=el("div","card anim");empty.style.cssText="text-align:center;padding:44px 20px";
+    empty.innerHTML=`<div style='font-size:40px;margin-bottom:12px;opacity:.25'>✈</div>
+      <div style='font-size:13px;color:var(--dim)'>Még nincs landolás.</div>
+      <div style='font-size:11px;color:var(--dim);margin-top:6px'>Szállj le a bridge segítségével és az adatok itt jelennek meg.</div>`;
+    m.appendChild(empty);return;
+  }
+
+  const land=S.landing;
+  const fpm=land.fpm||0;const absFpm=Math.abs(fpm);
+  const gs=land.gs||0;const ias=land.ias||0;
+
+  let quality,qCol;
+  if(absFpm<=200){quality="Greaser ✦";qCol="#52e3b0";}
+  else if(absFpm<=400){quality="Smooth";qCol="#5ec8ff";}
+  else if(absFpm<=600){quality="Firm";qCol="#ffb454";}
+  else if(absFpm<=900){quality="Hard";qCol="#f06080";}
+  else{quality="BOUNCE!";qCol="#a78bfa";}
+
+  // Runway SVG + stats side by side
+  const mainRow=el("div","flex gap12 anim");mainRow.style.cssText="align-items:flex-start;gap:16px";
+
+  // Runway SVG diagram
+  const svgWrap=el("div");svgWrap.style.cssText="flex-shrink:0";
+  // Touchdown position along runway: approximate from GS (100kt→early, 170kt→late)
+  const norm=Math.max(0,Math.min(1,(gs-90)/90));
+  const dotY=32+norm*22;// % along runway (32–54%)
+  // Approach track line
+  svgWrap.innerHTML=`<svg viewBox='0 0 100 210' width='110' height='231' style='display:block'>
+    <!-- Runway surface -->
+    <rect x='18' y='0' width='64' height='210' fill='#1e2535' rx='6'/>
+    <!-- Threshold bars -->
+    ${[6,11,16,21,26].map(y=>`<rect x='23' y='${y}' width='20' height='2.5' fill='white' opacity='.75'/>
+    <rect x='57' y='${y}' width='20' height='2.5' fill='white' opacity='.75'/>`).join('')}
+    <!-- TDZ markers -->
+    ${[36,44,52].map(y=>`<rect x='22' y='${y}' width='16' height='5' fill='white' opacity='.35'/>
+    <rect x='62' y='${y}' width='16' height='5' fill='white' opacity='.35'/>`).join('')}
+    <!-- Centerline dashes -->
+    ${Array.from({length:13},(_,i)=>`<rect x='49' y='${68+i*11}' width='2' height='7' fill='white' opacity='.3'/>`).join('')}
+    <!-- Approach glide path line -->
+    <line x1='50' y1='0' x2='50' y2='${dotY*2.1}' stroke='${qCol}' stroke-width='1.5' stroke-dasharray='5,3' opacity='.65'/>
+    <!-- Glow behind dot -->
+    <circle cx='50' cy='${dotY*2.1}' r='13' fill='${qCol}' opacity='.12'/>
+    <!-- Touchdown dot -->
+    <circle cx='50' cy='${dotY*2.1}' r='6' fill='${qCol}' opacity='.95'/>
+    <circle cx='50' cy='${dotY*2.1}' r='2.5' fill='white' opacity='.9'/>
+  </svg>`;
+
+  mainRow.appendChild(svgWrap);
+
+  // Stats
+  const stats=el("div","f1");stats.style.cssText="display:flex;flex-direction:column;gap:8px";
+
+  // Quality badge
+  const qBadge=el("div");qBadge.style.cssText=`font-size:22px;font-weight:900;color:${qCol};margin-bottom:2px`;qBadge.textContent=quality;
+  stats.appendChild(qBadge);
+
+  const aircraft=el("div");aircraft.style.cssText="font-size:10px;color:var(--dim);margin-bottom:6px";
+  aircraft.textContent=land.aircraftTitle||"—";stats.appendChild(aircraft);
+
+  [[`${fpm} fpm`,"Vertical Speed",absFpm>600?"var(--rd)":absFpm>400?"var(--am)":"var(--gn)"],
+   [`${gs} kt`,"Ground Speed","var(--cy)"],
+   [ias?`${ias} kt`:"—","IAS at T/D","var(--tx)"],
+   [`${land.headingDeg||0}°`,"Heading","var(--dim)"],
+  ].forEach(([v,l,c])=>{
+    const r=el("div");r.style.cssText="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--p2);border-radius:8px;border:1px solid var(--line)";
+    r.innerHTML=`<span style='font-size:10px;color:var(--dim)'>${l}</span><span style='font-size:16px;font-weight:800;color:${c};font-variant-numeric:tabular-nums'>${v}</span>`;
+    stats.appendChild(r);
+  });
+
+  // Timestamp
+  if(land.ts){
+    const ts=el("div");ts.style.cssText="font-size:9px;color:var(--dim);margin-top:4px";
+    ts.textContent=new Date(land.ts).toLocaleString();stats.appendChild(ts);
+  }
+
+  mainRow.appendChild(stats);
+
+  const card=el("div","card anim");card.appendChild(mainRow);m.appendChild(card);
+
+  // Coords
+  if(land.lat&&land.lon){
+    const loc=el("div","card anim");loc.style.cssText="animation-delay:60ms;font-size:10px;color:var(--dim)";
+    loc.innerHTML=`<span style='color:var(--tx)'>Érintési pont:</span> ${land.lat.toFixed(5)}°, ${land.lon.toFixed(5)}°`;
+    m.appendChild(loc);
+  }
 }
 
 // ── SETTINGS ──────────────────────────────────────────────────────

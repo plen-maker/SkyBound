@@ -30,6 +30,8 @@ export async function startFsuipc(onData, { retryMs = 5000 } = {}) {
             obj.add("vsRaw",    0x030C, Type.Int32);
             obj.add("onGround", 0x0366, Type.Int16);
             obj.add("destEte",  0x0C1C, Type.Int32);
+            obj.add("hdgRaw",   0x02CC, Type.UInt32);
+            obj.add("iasRaw",   0x02BC, Type.UInt32);
             obj.add("title",    0x3D00, Type.String, 256);
 
             const result = await obj.process();
@@ -43,9 +45,11 @@ export async function startFsuipc(onData, { retryMs = 5000 } = {}) {
             const destEteMin = (result.destEte || 0) / 60;
             const aircraftTitle = (result.title || "").replace(/\0/g, "").trim();
 
+            const headingDeg = (result.hdgRaw / 65536) * 360;
+            const iasKt      = (result.iasRaw || 0) / 128;
             onData({
               lat, lon, altFt, gsKt, vsFpm,
-              destEteMin,
+              destEteMin, headingDeg, iasKt,
               onGround: result.onGround === 1,
               aircraftTitle,
               ts: Date.now(),

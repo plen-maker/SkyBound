@@ -3,7 +3,7 @@ import { startSim } from "./sim.js";
 import { startFsuipc } from "./fsuipc_sim.js";
 import { createEngine } from "./triggers.js";
 import { fetchOFP } from "../../shared/simbrief.js";
-import { initFirebase, writeLive, watchTriggers, pushToDevices, clearLive } from "./firebase.js";
+import { initFirebase, writeLive, writeLanding, watchTriggers, pushToDevices, clearLive } from "./firebase.js";
 import { todDistanceNm } from "./geo.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -70,11 +70,30 @@ async function loadOFP() {
 
 let lastWrite = 0;
 let lastDataTs = 0;
-const DATA_TIMEOUT_MS = 15000; // 15s no data → clear live
+let prevOnGround = false;
+const DATA_TIMEOUT_MS = 15000;
 
 function handleTelemetry(telemetry) {
   const now = Date.now();
   lastDataTs = now;
+
+  // Touchdown detection: onGround false → true
+  if (!prevOnGround && telemetry.onGround) {
+    const landing = {
+      fpm:          Math.round(telemetry.vsFpm),
+      gs:           Math.round(telemetry.gsKt),
+      ias:          Math.round(telemetry.iasKt || 0),
+      headingDeg:   Math.round(telemetry.headingDeg || 0),
+      lat:          telemetry.lat,
+      lon:          telemetry.lon,
+      aircraftTitle: telemetry.aircraftTitle,
+      ts:           now,
+    };
+    writeLanding(SESSION, landing).catch(() => {});
+    console.log(`[landing] Touchdown: ${landing.fpm} FPM @ ${landing.gs} kt GS, IAS ${landing.ias} kt`);
+  }
+  prevOnGround = telemetry.onGround;
+
   if (now - lastWrite < 900) return;
   lastWrite = now;
   const derived = {

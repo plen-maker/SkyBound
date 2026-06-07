@@ -7,16 +7,18 @@ const DEF_FLOAT = 0, REQ_FLOAT = 0;
 const DEF_STR   = 1, REQ_STR   = 1;
 
 const VARS = [
-  ["PLANE LATITUDE",    "degrees"],
-  ["PLANE LONGITUDE",   "degrees"],
-  ["PLANE ALTITUDE",    "feet"],
-  ["GROUND VELOCITY",   "knots"],
-  ["VERTICAL SPEED",    "feet per minute"],
-  ["GPS WP DISTANCE",   "meters"],
-  ["GPS ETE",           "seconds"],
-  ["GPS WP NEXT LAT",   "degrees"],
-  ["GPS WP NEXT LON",   "degrees"],
-  ["SIM ON GROUND",     "bool"],
+  ["PLANE LATITUDE",                 "degrees"],
+  ["PLANE LONGITUDE",                "degrees"],
+  ["PLANE ALTITUDE",                 "feet"],
+  ["GROUND VELOCITY",                "knots"],
+  ["VERTICAL SPEED",                 "feet per minute"],
+  ["GPS WP DISTANCE",                "meters"],
+  ["GPS ETE",                        "seconds"],
+  ["GPS WP NEXT LAT",                "degrees"],
+  ["GPS WP NEXT LON",                "degrees"],
+  ["SIM ON GROUND",                  "bool"],
+  ["PLANE HEADING DEGREES MAGNETIC", "degrees"],
+  ["AIRSPEED INDICATED",             "knots"],
 ];
 
 export async function startSim(onData, { retryMs = 3000 } = {}) {
@@ -59,6 +61,8 @@ export async function startSim(onData, { retryMs = 3000 } = {}) {
           wpNextLat:   d.readFloat64(),
           wpNextLon:   d.readFloat64(),
           onGround:    d.readFloat64() === 1,
+          headingDeg:  d.readFloat64(),
+          iasKt:       d.readFloat64(),
           aircraftTitle,
           ts: Date.now(),
           source: "simconnect",

@@ -22,6 +22,10 @@ export function clearLive(sessionCode) {
   return db.ref(`sessions/${sessionCode}/live`).remove();
 }
 
+export function writeLanding(sessionCode, data) {
+  return db.ref(`sessions/${sessionCode}/lastLanding`).set(data);
+}
+
 export function watchTriggers(sessionCode, cb) {
   db.ref(`sessions/${sessionCode}/triggers`).on("value", snap => {
     const v = snap.val();
