@@ -5,36 +5,29 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar, View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { onAuthStateChanged } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from './src/firebase';
 import { THEME } from './src/theme';
 import { registerForPushNotifications } from './src/notifications';
 
-import LoginScreen from './src/screens/LoginScreen';
-import HomeScreen from './src/screens/HomeScreen';
-import SimBriefScreen from './src/screens/SimBriefScreen';
-import MetarScreen from './src/screens/MetarScreen';
-import VatsimScreen from './src/screens/VatsimScreen';
-import AlertsScreen from './src/screens/AlertsScreen';
+import LoginScreen   from './src/screens/LoginScreen';
+import ConnectScreen from './src/screens/ConnectScreen';
+import EFBScreen     from './src/screens/EFBScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
-const Tab = createBottomTabNavigator();
+const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-const TAB_ICONS = {
-  Home:     ['home',          'home-outline'],
-  SimBrief: ['document-text', 'document-text-outline'],
-  METAR:    ['partly-sunny',  'partly-sunny-outline'],
-  VATSIM:   ['radio',         'radio-outline'],
-  Alerts:   ['notifications', 'notifications-outline'],
-  Settings: ['settings',      'settings-outline'],
-};
-
-function MainTabs() {
+function MainTabs({ desktopUrl }) {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
-          const [active, inactive] = TAB_ICONS[route.name] || ['ellipse','ellipse-outline'];
+          const icons = {
+            EFB:      ['albums',   'albums-outline'],
+            Settings: ['settings', 'settings-outline'],
+          };
+          const [active, inactive] = icons[route.name] || ['ellipse','ellipse-outline'];
           return <Ionicons name={focused ? active : inactive} size={size} color={color} />;
         },
         tabBarActiveTintColor: THEME.cy,
@@ -50,30 +43,34 @@ function MainTabs() {
         headerShown: false,
       })}
     >
-      <Tab.Screen name="Home"     component={HomeScreen} />
-      <Tab.Screen name="SimBrief" component={SimBriefScreen} />
-      <Tab.Screen name="METAR"    component={MetarScreen} />
-      <Tab.Screen name="VATSIM"   component={VatsimScreen} />
-      <Tab.Screen name="Alerts"   component={AlertsScreen} />
+      <Tab.Screen
+        name="EFB"
+        component={EFBScreen}
+        initialParams={{ desktopUrl }}
+      />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
 }
 
 export default function App() {
-  const [user, setUser] = useState(undefined);
+  const [user, setUser]           = useState(undefined); // undefined = loading
+  const [desktopUrl, setDesktopUrl] = useState(null);
+  const [checking, setChecking]   = useState(true);
 
   useEffect(() => {
     return onAuthStateChanged(auth, async u => {
       setUser(u);
       if (u) {
-        // Register push notifications after login
         await registerForPushNotifications();
+        const saved = await AsyncStorage.getItem('desktopUrl');
+        setDesktopUrl(saved || null);
       }
+      setChecking(false);
     });
   }, []);
 
-  if (user === undefined) {
+  if (checking || user === undefined) {
     return (
       <View style={{ flex:1, backgroundColor: THEME.bg, justifyContent:'center', alignItems:'center' }}>
         <ActivityIndicator color={THEME.cy} size="large" />
@@ -82,14 +79,38 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
+    <>
       <StatusBar barStyle="light-content" backgroundColor={THEME.bg} />
-      {user
-        ? <MainTabs />
-        : <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <NavigationContainer theme={{
+        dark: true,
+        colors: {
+          primary: THEME.cy,
+          background: THEME.bg,
+          card: THEME.panel,
+          text: THEME.tx,
+          border: THEME.line,
+          notification: THEME.cy,
+        },
+      }}>
+        <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
+          {!user ? (
             <Stack.Screen name="Login" component={LoginScreen} />
-          </Stack.Navigator>
-      }
-    </NavigationContainer>
+          ) : !desktopUrl ? (
+            <Stack.Screen name="Connect">
+              {props => (
+                <ConnectScreen
+                  {...props}
+                  onConnected={url => setDesktopUrl(url)}
+                />
+              )}
+            </Stack.Screen>
+          ) : (
+            <Stack.Screen name="Main">
+              {() => <MainTabs desktopUrl={desktopUrl} />}
+            </Stack.Screen>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </>
   );
 }

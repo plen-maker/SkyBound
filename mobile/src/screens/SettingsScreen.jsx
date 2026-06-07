@@ -16,9 +16,10 @@ export default function SettingsScreen() {
   const [qnhUnit, setQnhUnit] = useState('hPa');
   const [isDev, setIsDev] = useState(false);
   const [pushTesting, setPushTesting] = useState(false);
+  const [desktopIp, setDesktopIp] = useState('');
 
   useEffect(() => {
-    AsyncStorage.multiGet(['sessionCode','sbUser','notifications','speedUnit','altUnit','qnhUnit'])
+    AsyncStorage.multiGet(['sessionCode','sbUser','notifications','speedUnit','altUnit','qnhUnit','desktopIp'])
       .then(pairs => {
         const m = Object.fromEntries(pairs);
         if (m.sessionCode) setSession(m.sessionCode);
@@ -27,6 +28,7 @@ export default function SettingsScreen() {
         if (m.speedUnit) setSpeedUnit(m.speedUnit);
         if (m.altUnit) setAltUnit(m.altUnit);
         if (m.qnhUnit) setQnhUnit(m.qnhUnit);
+        if (m.desktopIp) setDesktopIp(m.desktopIp);
       });
 
     // Check developer role from RTDB
@@ -87,6 +89,13 @@ export default function SettingsScreen() {
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
       <Text style={s.title}>Settings</Text>
 
+      {srow('Desktop IP', 'A desktop gép IP-je (pl. 192.168.1.100)',
+        <TextInput style={s.input} value={desktopIp}
+          onChangeText={v => { setDesktopIp(v); AsyncStorage.setItem('desktopIp', v); AsyncStorage.setItem('desktopUrl', `http://${v}:47821`); }}
+          placeholder="192.168.1.100" placeholderTextColor={C.dim}
+          keyboardType="numeric" autoCapitalize="none" />
+      )}
+
       {srow('Session kód', 'Egyedi azonosítód — ne add meg másnak',
         <TextInput style={s.input} value={session}
           onChangeText={v => { setSession(v); save('sessionCode', v); }}
@@ -125,7 +134,7 @@ export default function SettingsScreen() {
       </TouchableOpacity>
 
       <Card style={s.versionCard}>
-        <Text style={s.versionText}>Xdeck EFB — Orion · v0.1.0</Text>
+        <Text style={s.versionText}>Xdeck EFB — WeatherCast · v4.0.0</Text>
         <Text style={s.versionSub}>Electronic Flight Bag for MSFS 2020/2024</Text>
         {isDev && <Text style={[s.versionSub, { color: C.am, marginTop: 4 }]}>⚙ Developer</Text>}
       </Card>

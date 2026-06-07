@@ -2,8 +2,8 @@
   "expo": {
     "name": "Xdeck EFB",
     "slug": "xdeck-efb",
-    "version": "2.0.0",
-    "orientation.": "portrait",
+    "version": "4.0.0",
+    "orientation": "portrait",
     "backgroundColor": "#08090e",
     "icon": "./assets/icon.png",
     "splash": {
@@ -17,17 +17,26 @@
         "backgroundColor": "#08090e"
       },
       "package": "sxa.skybound.efb",
-      "versionCode": 1,
+      "versionCode": 4,
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
         "INTERNET",
         "ACCESS_NETWORK_STATE"
       ],
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "intentFilters": []
     },
     "plugins": [
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {
