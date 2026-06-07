@@ -29,7 +29,8 @@ export async function startFsuipc(onData, { retryMs = 5000 } = {}) {
             obj.add("gsRaw",    0x02B4, Type.Int32);
             obj.add("vsRaw",    0x030C, Type.Int32);
             obj.add("onGround", 0x0366, Type.Int16);
-            obj.add("destEte",  0x0C1C, Type.Int32); // ETE to dest in seconds
+            obj.add("destEte",  0x0C1C, Type.Int32);
+            obj.add("title",    0x3D00, Type.String, 256);
 
             const result = await obj.process();
 
@@ -40,11 +41,13 @@ export async function startFsuipc(onData, { retryMs = 5000 } = {}) {
             const gsKt   = (result.gsRaw / 65536) * 1.94384;
             const vsFpm  = result.vsRaw / 256;
             const destEteMin = (result.destEte || 0) / 60;
+            const aircraftTitle = (result.title || "").replace(/\0/g, "").trim();
 
             onData({
               lat, lon, altFt, gsKt, vsFpm,
               destEteMin,
               onGround: result.onGround === 1,
+              aircraftTitle,
               ts: Date.now(),
               source: "fsuipc7",
             });

@@ -3,7 +3,8 @@ import {
   open, Protocol, SimConnectDataType, SimConnectPeriod, SimConnectConstants,
 } from "node-simconnect";
 
-const DEF = 0, REQ = 0;
+const DEF_FLOAT = 0, REQ_FLOAT = 0;
+const DEF_STR   = 1, REQ_STR   = 1;
 
 const VARS = [
   ["PLANE LATITUDE",    "degrees"],
@@ -27,15 +28,25 @@ export async function startSim(onData, { retryMs = 3000 } = {}) {
       console.log("[sim] connected to", res.recvOpen.applicationName);
 
       for (const [name, unit] of VARS)
-        handle.addToDataDefinition(DEF, name, unit, SimConnectDataType.FLOAT64);
+        handle.addToDataDefinition(DEF_FLOAT, name, unit, SimConnectDataType.FLOAT64);
 
-      // Use SECOND period for 1Hz updates
+      handle.addToDataDefinition(DEF_STR, "TITLE", null, SimConnectDataType.STRING256);
+
       handle.requestDataOnSimObject(
-        REQ, DEF, SimConnectConstants.OBJECT_ID_USER, SimConnectPeriod.SECOND
+        REQ_FLOAT, DEF_FLOAT, SimConnectConstants.OBJECT_ID_USER, SimConnectPeriod.SECOND
+      );
+      handle.requestDataOnSimObject(
+        REQ_STR, DEF_STR, SimConnectConstants.OBJECT_ID_USER, SimConnectPeriod.SECOND
       );
 
+      let aircraftTitle = "";
+
       handle.on("simObjectData", (recv) => {
-        if (recv.requestID !== REQ) return;
+        if (recv.requestID === REQ_STR) {
+          try { aircraftTitle = recv.data.readString(256).replace(/\0/g, "").trim(); } catch {}
+          return;
+        }
+        if (recv.requestID !== REQ_FLOAT) return;
         const d = recv.data;
         onData({
           lat:         d.readFloat64(),
@@ -48,6 +59,7 @@ export async function startSim(onData, { retryMs = 3000 } = {}) {
           wpNextLat:   d.readFloat64(),
           wpNextLon:   d.readFloat64(),
           onGround:    d.readFloat64() === 1,
+          aircraftTitle,
           ts: Date.now(),
           source: "simconnect",
         });
