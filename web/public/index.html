@@ -409,9 +409,9 @@ footer{
 
   <div class="features-grid">
     <div class="feat reveal" style="--accent:var(--cy)">
-      <div class="feat-icon" style="background:rgba(77,240,255,.1)">📄</div>
-      <div class="feat-title">SimBrief OFP</div>
-      <div class="feat-desc">Load your full flight plan instantly. Weights, fuel breakdown, route, navlog — simplified or full realistic SimBrief document format.</div>
+      <div class="feat-icon" style="background:rgba(77,240,255,.1)">🌐</div>
+      <div class="feat-title">WebView Tabs</div>
+      <div class="feat-desc">Full embedded browser tabs — Navigraph Charts, SimBrief OFP, VATSIM Radar, and more. No switching apps, everything in one window.</div>
     </div>
     <div class="feat reveal" style="--accent:var(--gn);transition-delay:.1s">
       <div class="feat-icon" style="background:rgba(61,255,200,.1)">📡</div>
@@ -419,24 +419,24 @@ footer{
       <div class="feat-desc">1Hz real-time telemetry from MSFS via SimConnect or FSUIPC7. GS, altitude, V/S, position — synced to your phone and desktop instantly.</div>
     </div>
     <div class="feat reveal" style="--accent:var(--pu);transition-delay:.2s">
-      <div class="feat-icon" style="background:rgba(180,124,255,.1)">🔔</div>
-      <div class="feat-title">Push Alerts</div>
-      <div class="feat-desc">Set waypoint triggers that notify your phone. Top of Descent, fix crossing, landing — stay heads-up without watching the screen.</div>
+      <div class="feat-icon" style="background:rgba(180,124,255,.1)">🏆</div>
+      <div class="feat-title">Flight Ranker</div>
+      <div class="feat-desc">Rank airports and routes by weather, runway length, traffic load and approach complexity. Pick the best destination for your skill level.</div>
     </div>
     <div class="feat reveal" style="--accent:var(--am);transition-delay:.1s">
-      <div class="feat-icon" style="background:rgba(255,181,71,.1)">🌤</div>
-      <div class="feat-title">METAR & Weather</div>
-      <div class="feat-desc">Live METAR for any ICAO. Wind direction with visual arrow, cloud coverage color-coded by severity, QNH, temperature, dew point.</div>
+      <div class="feat-icon" style="background:rgba(255,181,71,.1)">📖</div>
+      <div class="feat-title">Aviation Dictionary</div>
+      <div class="feat-desc">Instant lookup for aviation terms, abbreviations and phraseology. METAR codes, NOTAM keywords, ATC shorthand — explained in plain language.</div>
     </div>
     <div class="feat reveal" style="--accent:var(--rd);transition-delay:.2s">
-      <div class="feat-icon" style="background:rgba(255,77,109,.1)">🗺</div>
-      <div class="feat-title">VATSIM ATC</div>
-      <div class="feat-desc">See active controllers on your route. DEL, GND, TWR, APP, CTR — tap any station to read the full ATIS text.</div>
+      <div class="feat-icon" style="background:rgba(255,77,109,.1)">🛬</div>
+      <div class="feat-title">Landing Analysis</div>
+      <div class="feat-desc">Automatic touchdown detection with FPM readout, G-force, and runway alignment. Track every landing and compare over time in the logbook.</div>
     </div>
     <div class="feat reveal" style="--accent:var(--cy);transition-delay:.3s">
-      <div class="feat-icon" style="background:rgba(77,240,255,.1)">🗺</div>
-      <div class="feat-title">Live Map</div>
-      <div class="feat-desc">Satellite or street map with your OFP route overlay. Real-time aircraft position updates as you fly.</div>
+      <div class="feat-icon" style="background:rgba(77,240,255,.1)">🔔</div>
+      <div class="feat-title">Push Alerts</div>
+      <div class="feat-desc">Set waypoint triggers that notify your phone. Top of Descent, fix crossing, landing — stay heads-up without watching the screen.</div>
     </div>
   </div>
 </section>
@@ -447,7 +447,7 @@ footer{
     <div class="section-label">Downloads</div>
     <h2 class="section-title reveal">Get Xdeck EFB</h2>
     <p class="section-sub reveal" style="transition-delay:.1s;margin-bottom:0">Always free. No account required for the desktop app.</p>
-    <div class="dl-grid">
+    <div class="dl-grid" style="grid-template-columns:repeat(3,1fr);max-width:1100px">
       <div class="dl-card reveal">
         <div class="dl-platform">Windows · Installer</div>
         <div class="dl-name">Xdeck EFB Setup <span id="winVer" style="font-size:13px;color:var(--dim);font-family:var(--mono);font-weight:400"></span></div>
@@ -458,14 +458,24 @@ footer{
         <div class="dl-note">Windows 10/11 · 64-bit</div>
       </div>
 
-      <div class="dl-card reveal" style="transition-delay:.2s">
-        <div class="dl-platform">Android</div>
+      <div class="dl-card reveal" style="transition-delay:.15s">
+        <div class="dl-platform">Android · Modern</div>
         <div class="dl-name">Xdeck EFB APK <span id="apkVer" style="font-size:13px;color:var(--dim);font-family:var(--mono);font-weight:400"></span></div>
-        <div class="dl-desc">Companion app for your phone. Live stats, SimBrief OFP, METAR, VATSIM, and push alerts from the bridge.</div>
+        <div class="dl-desc">For phones and tablets from 2017+. Optimized 64-bit build — smaller size, faster startup.</div>
         <a id="apkDlBtn" href="#" class="dl-btn dl-btn-apk" style="opacity:.4;pointer-events:none">
           ⬇ Loading...
         </a>
-        <div class="dl-note">Android 8.0+ · Enable unknown sources</div>
+        <div class="dl-note">Android 8.0+ · arm64 · Enable unknown sources</div>
+      </div>
+
+      <div class="dl-card reveal" style="transition-delay:.3s">
+        <div class="dl-platform">Android · Legacy</div>
+        <div class="dl-name">Xdeck EFB APK <span id="apkLegacyVer" style="font-size:13px;color:var(--dim);font-family:var(--mono);font-weight:400"></span> <span style="font-size:11px;color:var(--am);font-family:var(--mono)">legacy</span></div>
+        <div class="dl-desc">For older tablets (2014+). 32-bit ARMv7 build for smooth performance on low-end devices.</div>
+        <a id="apkLegacyDlBtn" href="#" class="dl-btn" style="background:var(--am);color:#05060c;opacity:.4;pointer-events:none">
+          ⬇ Loading...
+        </a>
+        <div class="dl-note">Android 5.0+ · armeabi-v7a · Enable unknown sources</div>
       </div>
     </div>
   </div>
@@ -527,11 +537,20 @@ firebase.database().ref("releases/latest").once("value").then(snap=>{
     btn.innerHTML="⬇ Download Installer";
     const vEl=document.getElementById("winVer");if(vEl)vEl.textContent=ver;
   }
-  if(r.apk_url){
+  // Modern APK (apk_modern_url preferred, apk_url as fallback)
+  const modernUrl=r.apk_modern_url||r.apk_url;
+  if(modernUrl){
     const btn=document.getElementById("apkDlBtn");
-    btn.href=r.apk_url;btn.style.opacity="1";btn.style.pointerEvents="auto";
+    btn.href=modernUrl;btn.style.opacity="1";btn.style.pointerEvents="auto";
     btn.innerHTML="⬇ Download APK";
     const vEl=document.getElementById("apkVer");if(vEl)vEl.textContent=ver;
+  }
+  // Legacy APK
+  if(r.apk_legacy_url){
+    const btn=document.getElementById("apkLegacyDlBtn");
+    btn.href=r.apk_legacy_url;btn.style.opacity="1";btn.style.pointerEvents="auto";
+    btn.innerHTML="⬇ Download APK";
+    const vEl=document.getElementById("apkLegacyVer");if(vEl)vEl.textContent=ver;
   }
   // Update hero badge
   const badge=document.querySelector(".hero-badge");
@@ -539,8 +558,7 @@ firebase.database().ref("releases/latest").once("value").then(snap=>{
     badge.innerHTML=`<div class="live-dot"></div>${r.codename} · v${r.version} — Now Available`;
   }
 }).catch(()=>{
-  // Fallback: show buttons without URLs hidden
-  ["winDlBtn","apkDlBtn"].forEach(id=>{
+  ["winDlBtn","apkDlBtn","apkLegacyDlBtn"].forEach(id=>{
     const el=document.getElementById(id);
     if(el){el.style.opacity="0.5";el.textContent="Download (unavailable)";}
   });
