@@ -139,19 +139,21 @@ jobs:
         run: npm install
       - name: Expo prebuild
         working-directory: mobile
-        run: npx expo prebuild --platform android --clean
+        run: npx expo prebuild --platform android
       - name: Build APK
         working-directory: mobile/android
         run: ./gradlew assembleRelease --no-daemon
-      - name: Rename APK
+      - name: Rename APKs
         run: |
-          SRC=mobile/android/app/build/outputs/apk/release
-          APK=$(find $SRC -name "*.apk" | head -1)
-          cp "$APK" $SRC/Xdeck-EFB.apk
-      - name: Upload APK to release
+          OUT=mobile/android/app/build/outputs/apk
+          cp "$OUT/modern/release/app-modern-release.apk" "$OUT/Xdeck-EFB-modern.apk"
+          cp "$OUT/legacy/release/app-legacy-release.apk" "$OUT/Xdeck-EFB-legacy.apk"
+      - name: Upload APKs to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag_name }}
-          files: mobile/android/app/build/outputs/apk/release/Xdeck-EFB.apk
+          files: |
+            mobile/android/app/build/outputs/apk/Xdeck-EFB-modern.apk
+            mobile/android/app/build/outputs/apk/Xdeck-EFB-legacy.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
