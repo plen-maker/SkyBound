@@ -127,7 +127,8 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;bac
 
       <div class="sect">Files</div>
       <div class="field"><label>WINDOWS INSTALLER URL (.exe)</label><input id="winUrl" placeholder="https://github.com/.../releases/download/.../Xdeck-EFB-Setup.exe"/></div>
-      <div class="field"><label>ANDROID APK URL (.apk)</label><input id="apkUrl" placeholder="https://github.com/.../releases/download/.../Xdeck-EFB.apk"/></div>
+      <div class="field"><label>ANDROID APK — MODERN (arm64, Android 8+)</label><input id="apkModernUrl" placeholder="https://github.com/.../releases/download/.../Xdeck-EFB-modern.apk"/></div>
+      <div class="field"><label>ANDROID APK — LEGACY (armeabi-v7a, Android 5+)</label><input id="apkLegacyUrl" placeholder="https://github.com/.../releases/download/.../Xdeck-EFB-legacy.apk"/></div>
 
       <div class="sect">Changelog</div>
       <div class="field"><label>NOTES (optional)</label><input id="changelog" placeholder="What's new in this release..."/></div>
@@ -186,7 +187,8 @@ async function loadCurrentRelease(){
     ["codename","version","changelog"].forEach(k=>{if(r[k])document.getElementById(k).value=r[k];});
     if(r.channel)document.getElementById("channel").value=r.channel;
     if(r.installer_url)document.getElementById("winUrl").value=r.installer_url;
-    if(r.apk_url)document.getElementById("apkUrl").value=r.apk_url;
+    if(r.apk_modern_url)document.getElementById("apkModernUrl").value=r.apk_modern_url;
+    if(r.apk_legacy_url)document.getElementById("apkLegacyUrl").value=r.apk_legacy_url;
   }catch{}
 }
 
@@ -194,8 +196,8 @@ async function publish(){
   const get=id=>document.getElementById(id).value.trim();
   const codename=get("codename"),version=get("version");
   if(!codename||!version){showMsg("pubMsg","Codename és version kötelező.","err");return;}
-  const winUrl=get("winUrl"), apkUrl=get("apkUrl");
-  if(!winUrl&&!apkUrl){showMsg("pubMsg","Adj meg legalább egy download URL-t.","err");return;}
+  const winUrl=get("winUrl"), apkModernUrl=get("apkModernUrl"), apkLegacyUrl=get("apkLegacyUrl");
+  if(!winUrl&&!apkModernUrl&&!apkLegacyUrl){showMsg("pubMsg","Adj meg legalább egy download URL-t.","err");return;}
 
   const btn=document.getElementById("pubBtn");
   btn.disabled=true;btn.textContent="Publishing...";
@@ -205,7 +207,8 @@ async function publish(){
       codename,version,
       channel:document.getElementById("channel").value,
       installer_url:winUrl||null,
-      apk_url:apkUrl||null,
+      apk_modern_url:apkModernUrl||null,
+      apk_legacy_url:apkLegacyUrl||null,
       changelog:get("changelog"),
       updated_at:Date.now(),
       updated_by:auth.currentUser?.email||""
