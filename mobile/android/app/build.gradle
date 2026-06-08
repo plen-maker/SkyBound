@@ -129,7 +129,7 @@ android {
         }
         legacy {
             dimension "target"
-            minSdkVersion 21          // Android 5.0+ (2014+), régi tabletekre
+            minSdkVersion 23          // Android 6.0+ (2015+), régi tabletekre
             versionNameSuffix "-legacy"
             ndk { abiFilters "armeabi-v7a" }
         }
