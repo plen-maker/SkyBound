@@ -129,9 +129,13 @@ android {
         }
         legacy {
             dimension "target"
-            minSdkVersion 23          // Android 6.0+ (2015+), régi tabletekre
+            minSdkVersion 23          // Android 6.0+ (2015+), régi tabletekre — Samsung 2019 S1
             versionNameSuffix "-legacy"
             ndk { abiFilters "armeabi-v7a" }
+            // Kisebb APK: csak a szükséges locale-ok
+            resConfigs "en", "hu"
+            // Régi eszközökön gyorsabb animáció-skip a JS oldalról
+            buildConfigField "boolean", "IS_LEGACY_BUILD", "true"
         }
     }
 

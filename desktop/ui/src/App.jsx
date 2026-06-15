@@ -10,7 +10,7 @@ import {
   Music, MessageCircle, Globe, Radar, Navigation2, Wifi, WifiOff,
   Plus, Trash2, Users, Weight, Fuel, ArrowDownRight,
   Loader2, AlertCircle, Gamepad2, ExternalLink,
-  Check, LogOut, Radio, Eye, EyeOff, RefreshCw, Layers,
+  Check, LogOut, Radio, Eye, EyeOff, RefreshCw, Layers, StickyNote,
 } from "lucide-react";
 
 /* ── PyWebView bridge ─────────────────────────────────────────── */
@@ -423,6 +423,7 @@ const TABS = [
   { id:"vatsim",      label:"VATSIM",  icon:Radio },
   { id:"charts",      label:"Charts",  icon:MapIcon },
   { id:"alerts",      label:"Alerts",  icon:Bell },
+  { id:"notes",       label:"Notes",   icon:StickyNote },
   { id:"controllers", label:"Ctrl",    icon:Gamepad2 },
   { id:"settings",    label:"Settings",icon:Cog },
 ];
@@ -825,6 +826,7 @@ function AppShell({ user }) {
           {tab==="vatsim"      && <VatsimTab/>}
           {tab==="charts"      && <ChartsTab ofp={ofp}/>}
           {tab==="alerts"      && <AlertsTab triggers={triggers} onAdd={addTr} onDel={delTr} onToggle={togTr}/>}
+          {tab==="notes"       && <NotesTab/>}
           {tab==="controllers" && <ControllersTab gamepads={gamepads} axisMap={axisMap} onSave={saveAxis} live={live}/>}
           {tab==="settings"    && <SettingsTab settings={settings} save={save} onLoadOFP={()=>loadOFP()}/>}
         </div>
@@ -1870,6 +1872,65 @@ function AxisRow({ ax }) {
             <div className="mono" style={{ fontSize:13, fontWeight:600, color:col, marginTop:1 }}>{val}</div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/* ══ NOTES TAB ════════════════════════════════════════════════════ */
+const NOTES_KEY = 'xdeck_notes_v1';
+function NotesTab() {
+  const [text, setText] = useState(() => ls.get(NOTES_KEY, ''));
+
+  function change(val) {
+    setText(val);
+    ls.set(NOTES_KEY, val);
+  }
+
+  return (
+    <div style={{ height:'100%', display:'flex', flexDirection:'column', gap:0 }}>
+      {/* toolbar */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+        <span style={{ fontSize:9, fontWeight:700, letterSpacing:2, color:'var(--dim)' }}>NOTES</span>
+        <div style={{ flex:1 }}/>
+        <button
+          style={{ fontSize:11, padding:'4px 12px', background:'rgba(240,96,128,.08)',
+            border:'1px solid rgba(240,96,128,.2)', borderRadius:6,
+            color:'var(--rd)', cursor:'pointer' }}
+          onClick={() => { if(window.confirm('Töröljük az összes feljegyzést?')) change(''); }}>
+          Töröl
+        </button>
+        <button
+          style={{ fontSize:11, padding:'4px 12px', background:'rgba(94,200,255,.08)',
+            border:'1px solid rgba(94,200,255,.2)', borderRadius:6,
+            color:'var(--cy)', cursor:'pointer' }}
+          onClick={() => { try { navigator.clipboard.writeText(text); } catch {} }}>
+          Másolás
+        </button>
+      </div>
+      {/* editor */}
+      <textarea
+        value={text}
+        onChange={e => change(e.target.value)}
+        placeholder="Írj ide... (automatikusan menti)"
+        spellCheck={false}
+        style={{
+          flex: 1,
+          background: 'var(--panel)',
+          border: '1px solid var(--line)',
+          borderRadius: 10,
+          color: 'var(--tx)',
+          fontSize: 14,
+          lineHeight: '1.7',
+          padding: '14px 16px',
+          resize: 'none',
+          fontFamily: '"SF Mono","Fira Code","Consolas",monospace',
+          outline: 'none',
+          width: '100%',
+        }}
+      />
+      <div style={{ marginTop:6, fontSize:10, color:'var(--dim)', textAlign:'right' }}>
+        {text.length > 0 ? `${text.length} karakter · ${text.split('\n').filter(Boolean).length} sor` : 'üres'}
       </div>
     </div>
   );

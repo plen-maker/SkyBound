@@ -13,6 +13,7 @@ import { registerForPushNotifications } from './src/notifications';
 import LoginScreen   from './src/screens/LoginScreen';
 import ConnectScreen from './src/screens/ConnectScreen';
 import EFBScreen     from './src/screens/EFBScreen';
+import NoteScreen    from './src/screens/NoteScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
 const Tab   = createBottomTabNavigator();
@@ -25,6 +26,7 @@ function MainTabs({ desktopUrl }) {
         tabBarIcon: ({ focused, color, size }) => {
           const icons = {
             EFB:      ['albums',   'albums-outline'],
+            Note:     ['pencil',   'pencil-outline'],
             Settings: ['settings', 'settings-outline'],
           };
           const [active, inactive] = icons[route.name] || ['ellipse','ellipse-outline'];
@@ -48,6 +50,7 @@ function MainTabs({ desktopUrl }) {
         component={EFBScreen}
         initialParams={{ desktopUrl }}
       />
+      <Tab.Screen name="Note" component={NoteScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
