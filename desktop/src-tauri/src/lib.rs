@@ -544,11 +544,11 @@ async fn bridge_start(app: tauri::AppHandle, state: tauri::State<'_, AppState>) 
 
     // After 2.5s check if it already exited → emit crash event with log tail
     let app2 = app.clone();
-    let state2 = app.state::<AppState>();
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
         let exited = {
-            let mut bp = state2.bridge.lock().unwrap();
+            let st = app2.state::<AppState>();
+            let mut bp = st.bridge.lock().unwrap();
             bp.bridge.as_mut().and_then(|c| c.try_wait().ok()).flatten().is_some()
         };
         if exited {
