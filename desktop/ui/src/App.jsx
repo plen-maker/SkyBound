@@ -2465,6 +2465,7 @@ function BridgeTab({ live, sessionCode }) {
   const [running,     setRunning]     = useState(false);
   const [loading,     setLoading]     = useState(false);
   const [err,         setErr]         = useState("");
+  const [crashLog,    setCrashLog]    = useState("");
   const [installing,  setInstalling]  = useState(false);
   const [installDone, setInstallDone] = useState(false);
   const [log,         setLog]         = useState([]);
@@ -2477,7 +2478,13 @@ function BridgeTab({ live, sessionCode }) {
     const t = setInterval(() => {
       invoke("bridge_status").then(r => setRunning(r.running)).catch(()=>{});
     }, 3000);
-    return () => clearInterval(t);
+    // Listen for crash events
+    let unlisten;
+    listen("bridge:crashed", e => {
+      setRunning(false);
+      setCrashLog(String(e.payload));
+    }).then(u => { unlisten = u; });
+    return () => { clearInterval(t); unlisten?.(); };
   }, []);
 
   // Auto-scroll log
@@ -2501,7 +2508,7 @@ function BridgeTab({ live, sessionCode }) {
   }
 
   async function toggle() {
-    setLoading(true); setErr("");
+    setLoading(true); setErr(""); setCrashLog("");
     try {
       if (running) {
         await invoke("bridge_stop");
@@ -2615,6 +2622,24 @@ function BridgeTab({ live, sessionCode }) {
           Session: <span style={{ color:"var(--cy)", fontFamily:"monospace" }}>{sessionCode || "—"}</span>
         </div>
       </div>
+      )}
+
+      {/* Crash log */}
+      {crashLog && (
+        <div className="card anim-up" style={{ padding:"12px 14px",
+          border:"1px solid rgba(240,96,128,.3)", background:"rgba(240,96,128,.05)" }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"var(--rd)", marginBottom:6 }}>
+            Bridge kilépett — bridge.log:
+          </div>
+          <pre style={{ fontSize:10, color:"var(--dim)", fontFamily:"monospace",
+            whiteSpace:"pre-wrap", margin:0, lineHeight:1.6, maxHeight:160, overflowY:"auto" }}>
+            {crashLog}
+          </pre>
+          <button className="btn-ghost" style={{ marginTop:8, fontSize:11 }}
+            onClick={() => invoke("bridge_read_log").then(setCrashLog)}>
+            <RefreshCw size={11}/> Frissítés
+          </button>
+        </div>
       )}
 
       {/* Live adatok ha csatlakozva */}

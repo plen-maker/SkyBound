@@ -8,10 +8,9 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 
 struct BridgeProc {
     bridge: Option<Child>,
-    proxy:  Option<Child>,
 }
 impl BridgeProc {
-    fn new() -> Self { Self { bridge: None, proxy: None } }
+    fn new() -> Self { Self { bridge: None } }
 }
 
 struct AppState {
@@ -472,55 +471,108 @@ async fn bridge_install(app: tauri::AppHandle, session_code: String) -> Result<(
     Ok(())
 }
 
+fn find_node() -> String {
+    // GUI apps on Windows don't inherit PATH — try common node locations
+    #[cfg(windows)]
+    {
+        let candidates = [
+            "node.exe",
+            r"C:\Program Files\nodejs\node.exe",
+            r"C:\Program Files (x86)\nodejs\node.exe",
+        ];
+        // Also check LOCALAPPDATA\Programs\nodejs
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            let p = format!(r"{local}\Programs\nodejs\node.exe");
+            if PathBuf::from(&p).exists() { return p; }
+        }
+        for c in &candidates {
+            if PathBuf::from(c).exists() { return c.to_string(); }
+        }
+        // Last resort: nvm active version
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let nvm_dir = PathBuf::from(&appdata).join("nvm");
+            if let Ok(rd) = fs::read_dir(&nvm_dir) {
+                if let Some(entry) = rd.flatten().filter(|e| e.path().is_dir()).next() {
+                    let p = entry.path().join("node.exe");
+                    if p.exists() { return p.to_string_lossy().to_string(); }
+                }
+            }
+        }
+    }
+    "node".to_string()
+}
+
+fn no_window_cmd(program: &str) -> TokioCommand {
+    let mut cmd = TokioCommand::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 #[tauri::command]
-async fn bridge_start(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, String> {
-    // release lock before any .await
-    let (old_bridge, old_proxy) = {
-        let mut bp = state.bridge.lock().unwrap();
-        (bp.bridge.take(), bp.proxy.take())
-    };
-    if let Some(mut c) = old_bridge { let _ = c.kill().await; }
-    if let Some(mut c) = old_proxy  { let _ = c.kill().await; }
+async fn bridge_start(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let old = { let mut bp = state.bridge.lock().unwrap(); bp.bridge.take() };
+    if let Some(mut c) = old { let _ = c.kill().await; }
 
     let dir = bridge_dir();
     if !dir.exists() {
-        return Err(format!(
-            "Bridge mappa nem található: {}\nClónozd a SkyBound repo bridge mappáját ide.",
-            dir.display()
-        ));
+        return Err("nem található".to_string());
     }
 
-    let bridge = TokioCommand::new("node")
+    let node = find_node();
+
+    // Log to file so we can show errors
+    let log_path = dir.join("bridge.log");
+    let log_out = fs::OpenOptions::new().create(true).write(true).truncate(true)
+        .open(&log_path).map_err(|e| e.to_string())?;
+    let log_err = log_out.try_clone().map_err(|e| e.to_string())?;
+
+    let child = no_window_cmd(&node)
         .arg("src/index.js")
         .current_dir(&dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stdout(log_out)
+        .stderr(log_err)
         .spawn()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("node nem indítható ({node}): {e}\nTelepítve van a Node.js és a PATH-ban van?"))?;
 
-    let proxy = TokioCommand::new("node")
-        .arg("proxy.js")
-        .current_dir(&dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let pid = child.id();
+    { state.bridge.lock().unwrap().bridge = Some(child); }
 
-    let mut bp = state.bridge.lock().unwrap();
-    bp.bridge = Some(bridge);
-    bp.proxy  = Some(proxy);
+    // After 2.5s check if it already exited → emit crash event with log tail
+    let app2 = app.clone();
+    let state2 = app.state::<AppState>();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
+        let exited = {
+            let mut bp = state2.bridge.lock().unwrap();
+            bp.bridge.as_mut().and_then(|c| c.try_wait().ok()).flatten().is_some()
+        };
+        if exited {
+            let log = fs::read_to_string(&log_path).unwrap_or_default();
+            let tail = log.lines().rev().take(8).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
+            app2.emit("bridge:crashed", tail).ok();
+        }
+    });
 
-    Ok(serde_json::json!({ "ok": true }))
+    Ok(serde_json::json!({ "ok": true, "pid": pid }))
+}
+
+#[tauri::command]
+async fn bridge_read_log() -> String {
+    let log = bridge_dir().join("bridge.log");
+    fs::read_to_string(&log).unwrap_or_default()
+        .lines().rev().take(20).collect::<Vec<_>>()
+        .into_iter().rev().collect::<Vec<_>>().join("\n")
 }
 
 #[tauri::command]
 async fn bridge_stop(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, String> {
-    let (old_bridge, old_proxy) = {
-        let mut bp = state.bridge.lock().unwrap();
-        (bp.bridge.take(), bp.proxy.take())
-    };
-    if let Some(mut c) = old_bridge { let _ = c.kill().await; }
-    if let Some(mut c) = old_proxy  { let _ = c.kill().await; }
+    let old = { let mut bp = state.bridge.lock().unwrap(); bp.bridge.take() };
+    if let Some(mut c) = old { let _ = c.kill().await; }
     Ok(serde_json::json!({ "ok": true }))
 }
 
@@ -548,6 +600,7 @@ pub fn run() {
             bridge_start,
             bridge_stop,
             bridge_status,
+            bridge_read_log,
             mods_get_community_folder,
             mods_list,
             mod_toggle,
