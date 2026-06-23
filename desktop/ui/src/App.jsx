@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { initializeApp, getApps } from "firebase/app";
 import {
   getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
@@ -11,6 +12,8 @@ import {
   Plus, Trash2, Users, Weight, Fuel, ArrowDownRight,
   Loader2, AlertCircle, Gamepad2, ExternalLink,
   Check, LogOut, Radio, Eye, EyeOff, RefreshCw, Layers, StickyNote,
+  BookOpen, Book, Activity, Server, TrendingDown, PackageOpen,
+  Search, FolderOpen, X, ToggleLeft, ToggleRight, ChevronDown,
 } from "lucide-react";
 
 /* ── PyWebView bridge ─────────────────────────────────────────── */
@@ -22,8 +25,15 @@ const py = {
     } catch(e) { console.warn("[py]", method, e); }
     return null;
   },
-  openExternal: url => fetch(`http://127.0.0.1:47821/api/open-url?url=${encodeURIComponent(url)}`).catch(()=>null),
-  openInApp:    url => py.call("open_inapp", url),
+  openExternal: async url => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-shell");
+      return open(url);
+    } catch { window.open(url, "_blank"); }
+  },
+  openInApp: async url => {
+    window.dispatchEvent(new CustomEvent("sb:openInApp", { detail: url }));
+  },
   saveSettings: s   => py.call("save_settings", JSON.stringify(s)),
   loadSettings: ()  => py.call("load_settings"),
   fetchOFP:     u   => py.call("fetch_ofp", u),
@@ -71,361 +81,31 @@ const ls = {
 };
 const openUrl = (url, inApp=false) => inApp ? py.openInApp(url) : py.openExternal(url);
 
-/* ══ DESIGN TOKENS + GLOBAL CSS ══════════════════════════════════ */
-const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* CSS is in global.css — no inline style injection needed */
 
-*, *::before, *::after { box-sizing: border-box; }
+/* (CSS moved to global.css) */
 
-:root {
-  --bg:    #070b12;
-  --panel: #0c1520;
-  --p2:    #111c2b;
-  --p3:    #162236;
-  --line:  #1c2d42;
-  --cy:    #5ec8ff;
-  --am:    #ffb454;
-  --gn:    #52e3b0;
-  --rd:    #f06080;
-  --pu:    #a78bfa;
-  --tx:    #d8e6f3;
-  --dim:   #5a7a96;
-  --font:  -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif;
-}
-
-html, body, #root { height: 100%; margin: 0; overflow: hidden; }
-body {
-  background: var(--bg);
-  font-family: var(--font);
-  color: var(--tx);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 3px; height: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: var(--dim); }
-
-/* ── Focus ── */
-input, select, button { font-family: var(--font); }
-input:focus, select:focus {
-  outline: none;
-  border-color: var(--cy) !important;
-  box-shadow: 0 0 0 3px rgba(94,200,255,.12);
-}
-button { outline: none; }
-button:focus-visible { box-shadow: 0 0 0 3px rgba(94,200,255,.3); }
-
-/* ══ ANIMATIONS ══════════════════════════════════════════════════ */
-
-/* Entry animations */
-@keyframes fadeUp {
-  from { opacity: 0;  }
-  to   { opacity: 1; transform: none; }
-}
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes scaleIn {
-  from { opacity: 0;  }
-  to   { opacity: 1;  }
-}
-@keyframes slideRight {
-  from { opacity: 0;  }
-  to   { opacity: 1; transform: none; }
-}
-@keyframes slideDown {
-  from { opacity: 0;  }
-  to   { opacity: 1; transform: none; }
-}
-@keyframes tabSlide {
-  from { opacity: 0;  }
-  to   { opacity: 1; transform: none; }
-}
-
-/* Utility animation classes */
-.anim-up    { animation: fadeUp   0.32s cubic-bezier(0.2, 0.9, 0.4, 1) both; }
-.anim-in    { animation: fadeIn   0.22s ease both; }
-.anim-scale { animation: scaleIn  0.28s cubic-bezier(0.34, 1.5, 0.64, 1) both; }
-.anim-right { animation: slideRight 0.28s cubic-bezier(0.2, 0.9, 0.4, 1) both; }
-.anim-down  { animation: slideDown  0.25s cubic-bezier(0.34, 1.2, 0.64, 1) both; }
-.anim-tab   { animation: tabSlide   0.22s cubic-bezier(0.2, 0.9, 0.4, 1) both; }
-
-/* Spinner */
-@keyframes spin { to { transform: rotate(360deg); } }
-.spin { animation: spin 0.9s linear infinite; }
-
-/* Pulse dot */
-@keyframes pulse {
-  0%, 100% { opacity: 0.35;  }
-  50%       { opacity: 1;     }
-}
-.pulse { animation: pulse 2.2s ease-in-out infinite; }
-
-/* ══ BUTTON SYSTEM ════════════════════════════════════════════════ */
-
-/* Primary CTA button */
-.btn-primary {
-  background: var(--cy);
-  color: #070b12;
-  border: none;
-  border-radius: 10px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  box-shadow: 0 4px 16px rgba(94,200,255,.28), 0 1px 2px rgba(0,0,0,.3);
-  user-select: none;
-  -webkit-user-select: none;
-  
-}
-.btn-primary:hover:not(:disabled) {
-  opacity: 0.9;
-  box-shadow: 0 8px 24px rgba(94,200,255,.38), 0 2px 4px rgba(0,0,0,.3);
-}
-.btn-primary:active:not(:disabled) {
-  opacity: 0.8;
-  box-shadow: 0 2px 8px rgba(94,200,255,.2);
-}
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-
-/* Ghost button */
-.btn-ghost {
-  background: var(--p2);
-  color: var(--dim);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 7px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  
-}
-.btn-ghost:hover  { background: var(--p3); color: var(--tx); border-color: var(--dim);  }
-.btn-ghost:active {   }
-
-/* Pill toggle button */
-.btn-pill {
-  border-radius: 99px;
-  padding: 5px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--line);
-  background: var(--p2);
-  color: var(--dim);
-  user-select: none;
-  -webkit-user-select: none;
-  
-}
-.btn-pill:hover  { background: var(--p3); color: var(--tx); }
-.btn-pill.active {
-  background: var(--cy);
-  color: #070b12;
-  border-color: var(--cy);
-}
-
-/* Icon button */
-.btn-icon {
-  background: transparent;
-  border: none;
-  border-radius: 7px;
-  padding: 5px;
-  cursor: pointer;
-  color: var(--dim);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  
-}
-.btn-icon:hover  { color: var(--tx); background: var(--p2);  }
-.btn-icon:active {  }
-
-/* ══ CARD / TILE SYSTEM ══════════════════════════════════════════ */
-
-.card {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 14px;
-}
-
-/* Shortcut tile — lifts up + cyan glow on hover */
-.tile-shortcut {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 12px 10px;
-  cursor: pointer;
-  transition:
-    transform    0.32s cubic-bezier(0.34, 1.4, 0.64, 1),
-    border-color 0.22s ease,
-    box-shadow   0.32s cubic-bezier(0.34, 1.4, 0.64, 1),
-    background   0.18s ease;
-}
-.tile-shortcut:hover {
-  
-  border-color: rgba(94,200,255,.4);
-  box-shadow:
-    0 12px 32px -8px rgba(94,200,255,.18),
-    0 4px 12px -4px rgba(0,0,0,.5);
-  background: var(--p2);
-}
-.tile-shortcut:active {
-  
-  
-}
-
-/* List tile — slides right on hover */
-.tile-list {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px 12px;
-  transition:
-    transform    0.28s cubic-bezier(0.34, 1.3, 0.64, 1),
-    border-color 0.2s ease,
-    background   0.18s ease;
-}
-.tile-list:hover {
-  
-  border-color: rgba(94,200,255,.25);
-  background: var(--p2);
-}
-
-/* Chart provider tile */
-.tile-chart {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 14px;
-  cursor: pointer;
-  transition:
-    transform    0.3s cubic-bezier(0.34, 1.4, 0.64, 1),
-    border-color 0.22s ease,
-    box-shadow   0.3s ease;
-}
-.tile-chart:hover {
-  
-  box-shadow: 0 10px 28px -8px rgba(0,0,0,.5);
-}
-.tile-chart:active {   }
-
-/* ══ NAV ITEMS ════════════════════════════════════════════════════ */
-.nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 8px 0;
-  border-radius: 10px;
-  cursor: pointer;
-  color: var(--dim);
-  border: 1px solid transparent;
-  
-}
-.nav-item:hover {  background: var(--p2); color: var(--tx); }
-.nav-item.active {
-  background: var(--p2);
-  color: var(--cy);
-  border-color: var(--line);
-  
-  box-shadow: inset 2px 0 0 var(--cy);
-}
-
-/* Settings pills — no transition to prevent flash on re-render */
-.settings-pill {
-  border-radius: 99px;
-  padding: 5px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--line);
-  background: var(--p2);
-  color: var(--dim);
-  user-select: none;
-  -webkit-user-select: none;
-}
-.settings-pill:hover  { background: var(--p3); color: var(--tx); }
-.settings-pill.active {
-  background: var(--cy);
-  color: #070b12;
-  border-color: var(--cy);
-}
-
-/* ══ STAT WIDGET ══════════════════════════════════════════════════ */
-.stat-card {
-  background: var(--p2);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px 14px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-.stat-card.live {
-  border-color: rgba(94,200,255,.2);
-  box-shadow: 0 0 16px -8px rgba(94,200,255,.15);
-}
-
-/* ══ INPUT SYSTEM ═════════════════════════════════════════════════ */
-.inp {
-  background: var(--p2);
-  border: 1px solid var(--line);
-  color: var(--tx);
-  font-size: 13px;
-  border-radius: 9px;
-  padding: 8px 11px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  width: 100%;
-}
-.inp::placeholder { color: var(--dim); }
-.inp:focus {
-  border-color: var(--cy);
-  box-shadow: 0 0 0 3px rgba(94,200,255,.1);
-  outline: none;
-}
-
-/* ══ BADGE ════════════════════════════════════════════════════════ */
-.badge {
-  border-radius: 99px;
-  padding: 2px 8px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-}
-
-/* ══ MISC ═════════════════════════════════════════════════════════ */
-.mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
-.section-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1.4px;
-  text-transform: uppercase;
-  color: var(--dim);
-  margin-bottom: 8px;
-}
-`;
 
 /* ══ TABS CONFIG ═════════════════════════════════════════════════ */
 const TABS = [
-  { id:"home",        label:"Home",    icon:Plane },
-  { id:"map",         label:"Map",     icon:MapIcon },
-  { id:"ground",      label:"Ground",  icon:Layers },
-  { id:"ofp",         label:"OFP",     icon:FileText },
-  { id:"vatsim",      label:"VATSIM",  icon:Radio },
-  { id:"charts",      label:"Charts",  icon:MapIcon },
-  { id:"alerts",      label:"Alerts",  icon:Bell },
-  { id:"notes",       label:"Notes",   icon:StickyNote },
-  { id:"controllers", label:"Ctrl",    icon:Gamepad2 },
-  { id:"settings",    label:"Settings",icon:Cog },
+  { id:"home",        label:"Home",    icon:Plane,        color:"#5ec8ff" },
+  { id:"map",         label:"Map",     icon:MapIcon,      color:"#52e3b0" },
+  { id:"ground",      label:"Ground",  icon:Layers,       color:"#52e3b0" },
+  { id:"ofp",         label:"OFP",     icon:FileText,     color:"#ffb454" },
+  { id:"vatsim",      label:"VATSIM",  icon:Radio,        color:"#52e3b0" },
+  { id:"charts",      label:"Charts",  icon:MapIcon,      color:"#a78bfa" },
+  null,
+  { id:"alerts",      label:"Alerts",  icon:Bell,         color:"#f06080" },
+  { id:"notes",       label:"Notes",   icon:StickyNote,   color:"#ffb454" },
+  { id:"controllers", label:"Ctrl",    icon:Gamepad2,     color:"#a78bfa" },
+  { id:"bridge",      label:"Bridge",  icon:Server,       color:"#52e3b0" },
+  null,
+  { id:"landing",     label:"Land",    icon:TrendingDown, color:"#5ec8ff" },
+  { id:"logbook",     label:"Log",     icon:Book,         color:"#ffb454" },
+  { id:"dict",        label:"Dict",    icon:BookOpen,     color:"#a78bfa" },
+  { id:"mods",        label:"Mods",    icon:PackageOpen,  color:"#ff9d4d" },
+  null,
+  { id:"settings",    label:"Setup",   icon:Cog,          color:"#5a7a96" },
 ];
 
 const SHORTCUTS = [
@@ -473,7 +153,7 @@ function LoginScreen() {
     <div style={{ height:"100vh", display:"flex", flexDirection:"column",
       alignItems:"center", justifyContent:"center", background:"var(--bg)", gap:16,
       background:"radial-gradient(ellipse at 30% 20%, #0e1e30 0%, var(--bg) 60%)" }}>
-      <style>{CSS}</style>
+
 
       {/* Logo */}
       <div className="anim-scale" style={{ width:68, height:68, borderRadius:20,
@@ -609,16 +289,65 @@ function UTCClock() {
   );
 }
 
+/* ══ IN-APP BROWSER ═══════════════════════════════════════════════ */
+function InAppBrowser({ url, onClose }) {
+  const [current, setCurrent] = useState(url);
+  const [input,   setInput]   = useState(url);
+  const iframeRef = useRef(null);
+
+  const go = (u) => { const safe = u.startsWith("http")?u:`https://${u}`; setCurrent(safe); setInput(safe); };
+
+  return (
+    <div style={{
+      position:"fixed", inset:0, zIndex:9999,
+      background:"rgba(7,11,18,.92)", backdropFilter:"blur(12px)",
+      display:"flex", flexDirection:"column",
+    }} className="anim-in">
+      {/* Toolbar */}
+      <div style={{
+        height:48, display:"flex", alignItems:"center", gap:8, padding:"0 12px",
+        background:"var(--panel)", borderBottom:"1px solid var(--line)", flexShrink:0,
+      }}>
+        <button className="btn-icon" onClick={()=>go(current)} title="Újratölt">
+          <RefreshCw size={14}/>
+        </button>
+        <input
+          value={input}
+          onChange={e=>setInput(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&go(input)}
+          style={{
+            flex:1, background:"var(--p2)", border:"1px solid var(--line)",
+            color:"var(--tx)", fontSize:12, borderRadius:8, padding:"6px 10px",
+          }}/>
+        <button className="btn-ghost" onClick={()=>{ py.openExternal(current); }}
+          style={{ flexShrink:0, fontSize:11 }} title="Megnyitás böngészőben">
+          <ExternalLink size={12}/>Böngésző
+        </button>
+        <button className="btn-icon" onClick={onClose} title="Bezárás">
+          <X size={16}/>
+        </button>
+      </div>
+      {/* WebView */}
+      <iframe
+        ref={iframeRef}
+        src={current}
+        style={{ flex:1, border:"none", background:"#fff" }}
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+        title="In-app browser"
+      />
+    </div>
+  );
+}
+
 /* ══ APP SHELL ════════════════════════════════════════════════════ */
 function AppShell({ user }) {
   const [tab, setTab]           = useState("home");
   const [prevTab, setPrevTab]   = useState(null);
   const [settings, setSettings] = useState(() => ({
-    sbUser:"ddnemet", fenixUrl:"", sessionCode:"ddnemet-host",
+    sbUser:"", fenixUrl:"", sessionCode:"",
     openLinksInApp:false, ofpMode:"simplified", theme:"dark",
     ...ls.get("sb_settings",{}),
     // Always override sbUser default if not set
-    ...(ls.get("sb_settings",{}).sbUser ? {} : {sbUser:"ddnemet"}),
   }));
 
   // Apply theme to :root
@@ -692,15 +421,12 @@ function AppShell({ user }) {
     if (!un) { setOfpState("error"); setOfpErr("Adj meg SimBrief usernevet."); return; }
     setOfpState("loading"); setOfpErr("");
     try {
-      const r = await Promise.race([
-        py.fetchOFP(un),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error("Timeout (12s)")),12000)),
-      ]);
+      const r = await invoke("fetch_ofp", { username: un });
       if (!r) { setOfpState("error"); setOfpErr("Nincs válasz a szervertől."); }
-      else if (r?.error) { setOfpState("error"); setOfpErr(r.error); }
-      else if (r?.ofp) { setOfp(r.ofp); setOfpState("idle"); save("sbUser",un); }
+      else if (r?.error) { setOfpState("error"); setOfpErr(String(r.error)); }
+      else if (r?.ofp) { setOfp(r.ofp); setOfpState("idle"); save("sbUser", un); }
       else { setOfpState("error"); setOfpErr("Ismeretlen hiba."); }
-    } catch(e) { setOfpState("error"); setOfpErr(e.message); }
+    } catch(e) { setOfpState("error"); setOfpErr(String(e)); }
   };
   const loadOFPRef = useRef(loadOFP);
   useEffect(() => { loadOFPRef.current = loadOFP; });
@@ -734,6 +460,14 @@ function AppShell({ user }) {
   },[]);
   const saveAxis=(gid,ai,lbl)=>{ const n={...axisMap,[`${gid}:${ai}`]:lbl}; setAxisMap(n); ls.set("sb_axes",n); };
 
+  /* In-app browser */
+  const [inAppUrl, setInAppUrl] = useState(null);
+  useEffect(()=>{
+    const h = e => setInAppUrl(e.detail);
+    window.addEventListener("sb:openInApp", h);
+    return () => window.removeEventListener("sb:openInApp", h);
+  },[]);
+
   const shortcuts = SHORTCUTS.map(s=>({
     ...s,
     resolvedUrl:s.urlKey?settings[s.urlKey]:s.url,
@@ -744,7 +478,10 @@ function AppShell({ user }) {
   return (
     <div style={{ height:"100vh", display:"flex", flexDirection:"column",
       background:"var(--bg)", overflow:"hidden" }}>
-      <style>{CSS}</style>
+
+      {/* ── In-app browser overlay ── */}
+      {inAppUrl && <InAppBrowser url={inAppUrl} onClose={()=>setInAppUrl(null)}/>}
+
       {/* ── Titlebar ── */}
       <div style={{ height:52, display:"flex", alignItems:"center",
         justifyContent:"space-between", padding:"0 18px",
@@ -791,26 +528,31 @@ function AppShell({ user }) {
       <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
 
         {/* Sidebar */}
-        <div style={{ width:76, borderRight:"1px solid #1c2d42",
-          background:"#0a1520",
-          display:"flex", flexDirection:"column", padding:"8px 5px",
-          gap:2, flexShrink:0 }}>
+        <div style={{ width:80, borderRight:"1px solid #1c2d42",
+          background:"#09111e",
+          display:"flex", flexDirection:"column", padding:"8px 6px",
+          gap:1, flexShrink:0, overflowY:"auto" }}>
           {TABS.map((t,i) => {
+            if (t === null) return <div key={`sep-${i}`} className="nav-sep"/>;
             const I = t.icon;
+            const isActive = tab === t.id;
             return (
               <button key={t.id} onPointerDown={(e)=>{ e.preventDefault(); changeTab(t.id); }}
-                className={`nav-item anim-right ${tab===t.id?"active":""}`}
-                style={{ animationDelay:`${i*18}ms`, width:"100%", border:"none", cursor:"pointer" }}>
-                <I size={15}/>
-                <span style={{ fontSize:9, letterSpacing:.3, fontWeight:600 }}>{t.label}</span>
+                className={`nav-item anim-right ${isActive?"active":""}`}
+                style={{
+                  animationDelay:`${i*14}ms`, width:"100%", cursor:"pointer",
+                  ...(isActive ? {
+                    background: `${t.color}18`,
+                    color: t.color,
+                    boxShadow: `inset 3px 0 0 ${t.color}`,
+                  } : {}),
+                }}>
+                <I size={18}/>
+                <span style={{ fontSize:10, letterSpacing:.2, fontWeight:600 }}>{t.label}</span>
               </button>
             );
           })}
-          <button className="nav-item" onClick={()=>signOut(auth)}
-            style={{ marginTop:"auto", width:"100%", border:"none", cursor:"pointer" }}>
-            <LogOut size={13}/>
-            <span style={{ fontSize:9 }}>Out</span>
-          </button>
+          <div style={{ flex:1 }}/>
         </div>
 
         {/* Main content — re-mounts on tab change for animation */}
@@ -828,6 +570,11 @@ function AppShell({ user }) {
           {tab==="alerts"      && <AlertsTab triggers={triggers} onAdd={addTr} onDel={delTr} onToggle={togTr}/>}
           {tab==="notes"       && <NotesTab/>}
           {tab==="controllers" && <ControllersTab gamepads={gamepads} axisMap={axisMap} onSave={saveAxis} live={live}/>}
+          {tab==="bridge"      && <BridgeTab live={live} sessionCode={settings.sessionCode}/>}
+          {tab==="landing"     && <LandingTab sessionCode={settings.sessionCode}/>}
+          {tab==="logbook"     && <LogbookTab/>}
+          {tab==="dict"        && <DictTab/>}
+          {tab==="mods"        && <ModsTab/>}
           {tab==="settings"    && <SettingsTab settings={settings} save={save} onLoadOFP={()=>loadOFP()}/>}
         </div>
       </div>
@@ -873,7 +620,7 @@ export default function App() {
   if (user===undefined) return (
     <div style={{ height:"100vh", background:"var(--bg)", display:"flex",
       flexDirection:"column", alignItems:"center", justifyContent:"center", gap:12 }}>
-      <style>{CSS}</style>
+
       <div style={{ width:48, height:48, borderRadius:14,
         background:"linear-gradient(135deg,#5ec8ff,#7c8cff)",
         display:"flex", alignItems:"center", justifyContent:"center",
@@ -1126,11 +873,105 @@ function MapTab({ofp, live}) {
 }
 
 /* ══ GROUND MAP TAB ══════════════════════════════════════════════ */
+const GROUND_LAYERS = [
+  { id:"hybrid",    label:"Hybrid",    emoji:"🛰" },
+  { id:"chart",     label:"Chart",     emoji:"🗺" },
+  { id:"satellite", label:"Satellite", emoji:"📡" },
+];
+
+async function icaoToLatLon(icao) {
+  try {
+    const r = await fetch(
+      `https://aviationweather.gov/api/data/airport?ids=${encodeURIComponent(icao.toUpperCase())}&format=json`
+    );
+    const d = await r.json();
+    if (d?.[0]?.latitude) return { lat: d[0].latitude, lon: d[0].longitude, name: d[0].site };
+  } catch {}
+  // fallback: Nominatim
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(icao)}+airport&format=json&limit=1`,
+      { headers: { "Accept-Language": "en" } }
+    );
+    const d = await r.json();
+    if (d?.[0]) return { lat: parseFloat(d[0].lat), lon: parseFloat(d[0].lon), name: d[0].display_name };
+  } catch {}
+  return null;
+}
+
 function GroundTab({ live, ofp }) {
-  const mapRef  = React.useRef(null);
-  const leafRef = React.useRef(null);
-  const planeRef= React.useRef(null);
-  const [following, setFollowing] = React.useState(true);
+  const mapRef         = React.useRef(null);
+  const leafRef        = React.useRef(null);
+  const planeRef       = React.useRef(null);
+  const layerRefs      = React.useRef({});
+  const chartLayersRef = React.useRef([]);
+  const [following,     setFollowing]     = React.useState(true);
+  const [mapLayer,      setMapLayer]      = React.useState("hybrid");
+  const [icaoInput,     setIcaoInput]     = React.useState("");
+  const [icaoSearching, setIcaoSearching] = React.useState(false);
+  const [icaoErr,       setIcaoErr]       = React.useState("");
+  const [chartLoading,  setChartLoading]  = React.useState(false);
+
+  const clearChartLayers = () => {
+    const map = leafRef.current;
+    chartLayersRef.current.forEach(l => { try { map?.removeLayer(l); } catch {} });
+    chartLayersRef.current = [];
+  };
+
+  const loadAirportChart = React.useCallback(async (lat, lon) => {
+    const map = leafRef.current;
+    const L   = window.L;
+    if (!map || !L) return;
+    clearChartLayers();
+    setChartLoading(true);
+    const d = 0.045;
+    const bbox = `${lat-d},${lon-d},${lat+d},${lon+d}`;
+    const q = `[out:json][timeout:25];(way["aeroway"~"runway|taxiway|taxilane|apron|terminal|gate"](${bbox}););out body;>;out skel qt;`;
+    try {
+      const r = await fetch("https://overpass-api.de/api/interpreter", { method:"POST", body:q });
+      const data = await r.json();
+      const nodes = {};
+      data.elements.forEach(el => { if (el.type==="node") nodes[el.id]=[el.lat,el.lon]; });
+      const ways = data.elements.filter(el => el.type==="way");
+
+      ways.forEach(way => {
+        const coords = (way.nodes||[]).map(id=>nodes[id]).filter(Boolean);
+        if (coords.length < 2) return;
+        const type = way.tags?.aeroway;
+        const ref  = (way.tags?.ref || way.tags?.name || "").trim();
+        const closed = coords.length > 3 && coords[0][0]===coords[coords.length-1][0];
+
+        let layer;
+        if (type === "runway") {
+          layer = L.polyline(coords, { color:"#4a5568", weight:24, opacity:1, lineCap:"square" });
+        } else if (type === "apron" || type === "terminal") {
+          layer = closed
+            ? L.polygon(coords, { color:"#2d3a4a", fillColor:"#2d3a4a", fillOpacity:0.85, weight:0 })
+            : L.polyline(coords, { color:"#2d3a4a", weight:8, opacity:0.7 });
+        } else { // taxiway / taxilane
+          layer = L.polyline(coords, { color:"#5a6a7a", weight: type==="taxilane"?3:6, opacity:0.9, lineCap:"round" });
+        }
+        layer.addTo(map);
+        chartLayersRef.current.push(layer);
+
+        // Yellow taxiway sign badge
+        if ((type==="taxiway"||type==="taxilane") && ref) {
+          const mid = coords[Math.floor(coords.length/2)];
+          const badge = L.marker(mid, {
+            icon: L.divIcon({
+              html: `<div style="background:#f5c518;color:#000;border-radius:3px;padding:1px 5px 2px;font-size:10px;font-weight:900;font-family:'SF Mono','Consolas',monospace;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.7);border:1.5px solid #b8960e;letter-spacing:.4px;line-height:14px;">${ref}</div>`,
+              iconAnchor: [Math.max(ref.length*3.8, 8), 8],
+              className: "",
+            }),
+            zIndexOffset: 600,
+          });
+          badge.addTo(map);
+          chartLayersRef.current.push(badge);
+        }
+      });
+    } catch(e) { console.warn("Airport chart:", e); }
+    setChartLoading(false);
+  }, []);
 
   const makePlaneIcon = (L, heading) => L.divIcon({
     html: `<div id="gnd-plane" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;transform:rotate(${heading}deg);transition:transform .25s linear;">
@@ -1157,17 +998,30 @@ function GroundTab({ live, ofp }) {
       const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false }).setView(center, 17);
       leafRef.current = map;
 
-      // Satellite base
-      L.tileLayer(
+      // Layer definitions
+      layerRefs.current.satellite = L.tileLayer(
         "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         { maxZoom: 20 }
-      ).addTo(map);
-
-      // OSM overlay — taxiway labels + layout
-      L.tileLayer(
+      );
+      // ArcGIS Transportation labels — clean roads + airport taxiways on satellite
+      layerRefs.current.satLabels = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
+        { maxZoom: 20, opacity: 1 }
+      );
+      layerRefs.current.satPlaces = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+        { maxZoom: 20, opacity: 1 }
+      );
+      // OSM standard (inverted via CSS to dark) — shows taxiway letters at zoom 18+
+      layerRefs.current.osmChart = L.tileLayer(
         "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        { maxZoom: 20, opacity: 0.38 }
-      ).addTo(map);
+        { maxZoom: 20, className: "osm-invert" }
+      );
+
+      // Initial layer: hybrid (satellite + ArcGIS labels)
+      layerRefs.current.satellite.addTo(map);
+      layerRefs.current.satLabels.addTo(map);
+      layerRefs.current.satPlaces.addTo(map);
 
       if (live) {
         planeRef.current = L.marker([live.lat, live.lon], {
@@ -1209,6 +1063,44 @@ function GroundTab({ live, ofp }) {
     if (following) leafRef.current.setView(pos);
   }, [live?.lat, live?.lon, live?.headingDeg, following]);
 
+  const gotoIcao = React.useCallback(async (icao) => {
+    const code = (icao || icaoInput).trim().toUpperCase();
+    if (!code) return;
+    setIcaoSearching(true); setIcaoErr("");
+    const result = await icaoToLatLon(code);
+    setIcaoSearching(false);
+    if (!result) { setIcaoErr(`Nem találtam: ${code}`); return; }
+    if (leafRef.current) {
+      leafRef.current.setView([result.lat, result.lon], mapLayer === "chart" ? 17 : 17);
+      setFollowing(false);
+    }
+    setIcaoInput(code);
+    if (mapLayer === "chart") loadAirportChart(result.lat, result.lon);
+  }, [icaoInput, mapLayer, loadAirportChart]);
+
+  const switchLayer = React.useCallback((id) => {
+    setMapLayer(id);
+    const map = leafRef.current;
+    const lr = layerRefs.current;
+    if (!map || !lr.satellite) return;
+    [lr.satellite, lr.satLabels, lr.satPlaces, lr.osmChart].forEach(l => { if (l && map.hasLayer(l)) map.removeLayer(l); });
+    if (id === "satellite") {
+      clearChartLayers();
+      lr.satellite.addTo(map);
+    } else if (id === "chart") {
+      lr.osmChart.addTo(map);
+      if (map.getZoom() < 17) map.setZoom(17);
+      // render airport chart overlay from current map center
+      const c = map.getCenter();
+      loadAirportChart(c.lat, c.lng);
+    } else { // hybrid
+      clearChartLayers();
+      lr.satellite.addTo(map);
+      lr.satLabels.addTo(map);
+      lr.satPlaces.addTo(map);
+    }
+  }, [loadAirportChart]);
+
   const recenter = () => {
     setFollowing(true);
     if (live && leafRef.current) leafRef.current.setView([live.lat, live.lon], 17);
@@ -1218,20 +1110,104 @@ function GroundTab({ live, ofp }) {
     <div style={{ position:"relative", borderRadius:14, overflow:"hidden",
       border:"1px solid var(--line)", height:"calc(100vh - 110px)" }}>
       <div ref={mapRef} style={{ width:"100%", height:"100%" }}/>
+      {/* Chart loading indicator */}
+      {chartLoading && (
+        <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)",
+          zIndex:1001, background:"rgba(7,11,18,.88)", border:"1px solid var(--line)",
+          borderRadius:10, padding:"10px 18px", fontSize:13, color:"var(--cy)",
+          display:"flex", alignItems:"center", gap:8, backdropFilter:"blur(10px)" }}>
+          <Loader2 size={15} className="spin"/>Repülőtér térkép betöltése…
+        </div>
+      )}
 
-      {/* HUD overlay */}
+      {/* Top toolbar: ICAO search + layer toggle */}
+      <div style={{ position:"absolute", top:12, left:12, right:12, zIndex:1000,
+        display:"flex", gap:8, alignItems:"center" }}>
+
+        {/* ICAO search */}
+        <div style={{ display:"flex", gap:4, alignItems:"center",
+          background:"rgba(7,11,18,.92)", borderRadius:10, padding:"4px 4px",
+          border:"1px solid rgba(94,200,255,.25)", backdropFilter:"blur(12px)", flex:"0 0 auto",
+          boxShadow:"0 4px 16px rgba(0,0,0,.5)" }}>
+          <input
+            value={icaoInput}
+            onChange={e => { setIcaoInput(e.target.value.toUpperCase()); setIcaoErr(""); }}
+            onKeyDown={e => e.key==="Enter" && gotoIcao()}
+            placeholder="ICAO…"
+            maxLength={4}
+            style={{ width:76, background:"transparent", border:"none", outline:"none",
+              color:"var(--tx)", fontSize:14, fontFamily:"monospace", fontWeight:700,
+              letterSpacing:1.5, padding:"4px 8px", caretColor:"var(--cy)" }}
+          />
+          {icaoSearching
+            ? <Loader2 size={15} color="var(--cy)" className="spin" style={{ margin:"4px 8px" }}/>
+            : <button onClick={() => gotoIcao()}
+                style={{ background:"rgba(94,200,255,.18)", border:"1px solid rgba(94,200,255,.3)",
+                  borderRadius:7, color:"var(--cy)", cursor:"pointer",
+                  padding:"4px 10px", fontSize:13, fontWeight:700 }}>
+                Go
+              </button>
+          }
+        </div>
+
+        {/* OFP quick buttons */}
+        {ofp && (
+          <div style={{ display:"flex", gap:4 }}>
+            {[ofp.dep, ofp.arr].filter(Boolean).map(icao => (
+              <button key={icao} onClick={() => gotoIcao(icao)}
+                style={{ background:"rgba(7,11,18,.92)", border:"1px solid rgba(94,200,255,.25)",
+                  backdropFilter:"blur(12px)", borderRadius:8, padding:"6px 12px",
+                  fontSize:13, fontWeight:700, color:"var(--cy)", cursor:"pointer",
+                  fontFamily:"monospace", letterSpacing:.8,
+                  boxShadow:"0 4px 16px rgba(0,0,0,.5)" }}>
+                {icao}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {icaoErr && (
+          <div style={{ background:"rgba(240,96,128,.18)", border:"1px solid rgba(240,96,128,.4)",
+            borderRadius:8, padding:"5px 12px", fontSize:13, color:"var(--rd)",
+            fontWeight:600 }}>
+            {icaoErr}
+          </div>
+        )}
+
+        <div style={{ flex:1 }}/>
+
+        {/* Layer toggle */}
+        <div style={{ display:"flex", gap:2,
+          background:"rgba(7,11,18,.92)", borderRadius:10, padding:4,
+          border:"1px solid rgba(94,200,255,.2)", backdropFilter:"blur(12px)",
+          boxShadow:"0 4px 16px rgba(0,0,0,.5)" }}>
+          {GROUND_LAYERS.map(l => (
+            <button key={l.id} onClick={() => switchLayer(l.id)}
+              style={{ padding:"6px 12px", borderRadius:7, border:"none", cursor:"pointer",
+                fontSize:12, fontWeight:700, transition:"all .15s ease",
+                background: mapLayer===l.id ? "rgba(94,200,255,.22)" : "transparent",
+                color: mapLayer===l.id ? "var(--cy)" : "var(--tx)",
+              }}>
+              {l.emoji} {l.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* HUD overlay — bottom-left to avoid toolbar overlap */}
       {live && (
-        <div style={{ position:"absolute", top:12, left:12, zIndex:1000,
-          background:"rgba(7,11,18,.82)", border:"1px solid #1c2d42",
-          borderRadius:10, padding:"7px 12px", fontSize:11, color:"#d8e6f3",
-          display:"flex", flexDirection:"column", gap:4, pointerEvents:"none",
-          backdropFilter:"blur(6px)" }}>
-          <div style={{ fontWeight:700, fontSize:10, letterSpacing:1.1, color:"var(--cy)" }}>
+        <div style={{ position:"absolute", bottom:56, left:12, zIndex:1000,
+          background:"rgba(7,11,18,.88)", border:"1px solid rgba(94,200,255,.2)",
+          borderRadius:10, padding:"8px 14px", color:"#d8e6f3",
+          display:"flex", flexDirection:"column", gap:5, pointerEvents:"none",
+          backdropFilter:"blur(10px)", boxShadow:"0 4px 16px rgba(0,0,0,.5)" }}>
+          <div style={{ fontWeight:700, fontSize:10, letterSpacing:1.2, color:"var(--cy)", marginBottom:2 }}>
             {live.onGround ? "ON GROUND" : "AIRBORNE"}
           </div>
-          {live.gsKt != null && <div>GS <b>{Math.round(live.gsKt)} kt</b></div>}
-          {live.headingDeg != null && <div>HDG <b>{Math.round(live.headingDeg)}°</b></div>}
-          {!live.onGround && live.altFt != null && <div>ALT <b>{Math.round(live.altFt).toLocaleString()} ft</b></div>}
+          {live.gsKt      != null && <div style={{ fontSize:13 }}>GS  <b>{Math.round(live.gsKt)} kt</b></div>}
+          {live.headingDeg!= null && <div style={{ fontSize:13 }}>HDG <b>{Math.round(live.headingDeg)}°</b></div>}
+          {!live.onGround && live.altFt != null &&
+            <div style={{ fontSize:13 }}>ALT <b>{Math.round(live.altFt).toLocaleString()} ft</b></div>}
         </div>
       )}
 
@@ -1239,9 +1215,10 @@ function GroundTab({ live, ofp }) {
       {!following && live && (
         <button onClick={recenter}
           style={{ position:"absolute", bottom:20, right:20, zIndex:1000,
-            background:"#0d1520", border:"1px solid var(--cy)", color:"var(--cy)",
-            borderRadius:8, padding:"6px 14px", fontSize:11, fontWeight:600,
-            cursor:"pointer", backdropFilter:"blur(6px)" }}>
+            background:"rgba(7,11,18,.9)", border:"1px solid var(--cy)", color:"var(--cy)",
+            borderRadius:8, padding:"7px 16px", fontSize:13, fontWeight:700,
+            cursor:"pointer", backdropFilter:"blur(8px)",
+            boxShadow:"0 4px 16px rgba(94,200,255,.2)" }}>
           ⊕ Re-center
         </button>
       )}
@@ -1249,8 +1226,9 @@ function GroundTab({ live, ofp }) {
       {/* No live data notice */}
       {!live && (
         <div style={{ position:"absolute", bottom:20, left:"50%", transform:"translateX(-50%)",
-          zIndex:1000, background:"rgba(7,11,18,.82)", border:"1px solid #1c2d42",
-          borderRadius:8, padding:"6px 14px", fontSize:11, color:"var(--dim)" }}>
+          zIndex:1000, background:"rgba(7,11,18,.88)", border:"1px solid #1c2d42",
+          borderRadius:8, padding:"7px 16px", fontSize:13, color:"var(--dim)",
+          whiteSpace:"nowrap" }}>
           Bridge nincs csatlakoztatva — nincs élő pozíció
         </div>
       )}
@@ -1259,6 +1237,7 @@ function GroundTab({ live, ofp }) {
         .leaflet-container{background:#06090f;font-family:var(--font);}
         .leaflet-control-zoom a{background:#0d1520;color:#cdd9ec;border-color:#1c2d42;}
         .leaflet-control-zoom a:hover{background:#111c2b;}
+        .osm-invert { filter: invert(1) hue-rotate(180deg) brightness(0.55) contrast(1.1); }
       `}</style>
     </div>
   );
@@ -1337,7 +1316,7 @@ function OFPTab({sbUser, setSbUser, ofp, state, error, onLoad, mode, setMode}) {
           textTransform:"uppercase", color:"#5a7a96" }}>SimBrief OFP</div>
         <div style={{ display:"flex", gap:6 }}>
           {[["simplified","Simplified"],["realistic","Realistic"]].map(([v,l])=>(
-            <button key={v} style={S.pill(mode===v)} onClick={()=>setMode(v)}>{l}</button>
+            <button key={v} style={S_PILL(mode===v)} onClick={()=>setMode(v)}>{l}</button>
           ))}
         </div>
       </div>
@@ -1349,7 +1328,7 @@ function OFPTab({sbUser, setSbUser, ofp, state, error, onLoad, mode, setMode}) {
           <input style={S.inp} value={sbUser}
             onChange={e=>setSbUser(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&onLoad(sbUser)}
-            placeholder="pl. ddnemet"/>
+            placeholder="SimBrief felhasználónév"/>
           <button
             onClick={()=>onLoad(sbUser)}
             onPointerDown={(e)=>{ e.preventDefault(); onLoad(sbUser); }}
@@ -1417,8 +1396,8 @@ function OFPTab({sbUser, setSbUser, ofp, state, error, onLoad, mode, setMode}) {
       {ofp && mode==="realistic" && (
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-            {[["weights","Weights"],["fuel","Fuel"],["route","Route"],["navlog","Navlog"]].map(([k,l])=>(
-              <button key={k} style={S.pill(sec===k)} onClick={()=>setSec(k)}>{l}</button>
+            {[["weights","Weights"],["fuel","Fuel"],["route","Route"],["navlog","Navlog"],["dispatch","Full OFP"]].map(([k,l])=>(
+              <button key={k} style={S_PILL(sec===k)} onClick={()=>setSec(k)}>{l}</button>
             ))}
           </div>
           <div style={S.card}>
@@ -1466,6 +1445,18 @@ function OFPTab({sbUser, setSbUser, ofp, state, error, onLoad, mode, setMode}) {
                 </span>
               </div>
             ))}
+            {sec==="dispatch" && (
+              ofp.ofpText
+                ? <pre style={{
+                    margin:0, padding:0,
+                    fontFamily:"'SF Mono','Fira Mono','Consolas',monospace",
+                    fontSize:10.5, lineHeight:1.55, color:"#b8d0e8",
+                    whiteSpace:"pre-wrap", wordBreak:"break-word",
+                  }}>{ofp.ofpText}</pre>
+                : <div style={{ color:"var(--dim)", fontSize:12, textAlign:"center", padding:24 }}>
+                    OFP szöveg nem érhető el
+                  </div>
+            )}
           </div>
         </div>
       )}
@@ -2167,6 +2158,46 @@ function ControllersTab({ gamepads, axisMap, onSave, live }) {
 
 
 /* ══ SETTINGS TAB ════════════════════════════════════════════════ */
+/* ── Settings helpers — must be OUTSIDE SettingsTab to prevent remount on re-render ── */
+const S_ROW = {
+  display:"flex", alignItems:"center", justifyContent:"space-between",
+  padding:"12px 16px", background:"var(--panel)", border:"1px solid var(--line)",
+  borderRadius:12, gap:12,
+};
+const S_LABEL = { fontSize:13, color:"var(--tx)", fontWeight:500 };
+const S_DESC  = { fontSize:10, color:"var(--dim)", marginTop:3 };
+const S_INP   = {
+  background:"var(--p2)", border:"1px solid var(--line)", color:"var(--tx)",
+  fontSize:13, borderRadius:8, padding:"7px 11px", fontFamily:"inherit",
+};
+const S_PILL = (active) => ({
+  borderRadius:99, padding:"5px 14px", fontSize:12, fontWeight:600,
+  cursor:"pointer", border:"1px solid",
+  background: active ? "var(--cy)" : "var(--p2)",
+  color:       active ? "#070b12"   : "var(--dim)",
+  borderColor: active ? "var(--cy)" : "var(--line)",
+  transition: "background 0.15s ease, color 0.15s ease, border-color 0.15s ease",
+});
+
+function SettingsRow({label, desc, children}) {
+  return (
+    <div style={S_ROW}>
+      <div style={{ minWidth:0 }}>
+        <div style={S_LABEL}>{label}</div>
+        {desc && <div style={S_DESC}>{desc}</div>}
+      </div>
+      <div style={{ flexShrink:0 }}>{children}</div>
+    </div>
+  );
+}
+
+function SettingsSectionHead({label}) {
+  return (
+    <div style={{ fontSize:9, fontWeight:700, letterSpacing:1.8, textTransform:"uppercase",
+      color:"var(--dim)", marginTop:12, marginBottom:2, paddingLeft:4 }}>{label}</div>
+  );
+}
+
 const SettingsTab = React.memo(function SettingsTab({settings, save, onLoadOFP}) {
   const [ver,     setVer]     = useState(null);
   const [devOpen, setDevOpen] = useState(false);
@@ -2179,35 +2210,13 @@ const SettingsTab = React.memo(function SettingsTab({settings, save, onLoadOFP})
     });
   }, []);
 
-  const S = {
-    row: {
-      display:"flex", alignItems:"center", justifyContent:"space-between",
-      padding:"12px 16px", background:"#0c1520", border:"1px solid #1c2d42",
-      borderRadius:12, gap:12,
-    },
-    label: { fontSize:13, color:"#d8e6f3", fontWeight:500 },
-    desc:  { fontSize:10, color:"#5a7a96", marginTop:3 },
-    inp: {
-      background:"#111c2b", border:"1px solid #1c2d42", color:"#d8e6f3",
-      fontSize:13, borderRadius:8, padding:"7px 11px",
-    },
-    pill: (active) => ({
-      borderRadius:99, padding:"5px 14px", fontSize:12, fontWeight:600,
-      cursor:"pointer", border:"1px solid",
-      background: active ? "#5ec8ff" : "#0d1825",
-      color:       active ? "#070b12" : "#5a7a96",
-      borderColor: active ? "#5ec8ff" : "#1c2d42",
-    }),
-  };
-
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-      <div style={{ fontSize:10, fontWeight:700, letterSpacing:1.5,
-        textTransform:"uppercase", color:"#5a7a96", marginBottom:4 }}>Settings</div>
+    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+      <div style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>Settings</div>
 
-      {/* Téma — color swatches */}
-      <div style={S.row}>
-        <div style={S.label}>Téma</div>
+      {/* ── Megjelenés ── */}
+      <SettingsSectionHead label="Megjelenés"/>
+      <SettingsRow label="Téma" desc="App színvilág">
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
           {[
             ["dark",    "#070b12","#5ec8ff"],
@@ -2219,89 +2228,158 @@ const SettingsTab = React.memo(function SettingsTab({settings, save, onLoadOFP})
           ].map(([v,bg,ac])=>{
             const active = (settings.theme||"dark")===v;
             return (
-              <button key={v} onClick={()=>save("theme",v)}
-                title={v}
-                style={{
-                  width:28, height:28, borderRadius:"50%",
+              <button key={v} onClick={()=>save("theme",v)} title={v}
+                style={{ width:28, height:28, borderRadius:"50%",
                   background:`linear-gradient(135deg, ${bg} 50%, ${ac} 50%)`,
                   border: active ? `3px solid ${ac}` : "2px solid #1c2d42",
                   cursor:"pointer",
-                  boxShadow: active ? `0 0 8px ${ac}88` : "none",
-                  padding:0, flexShrink:0,
-                }}/>
+                  boxShadow: active ? `0 0 10px ${ac}88` : "none",
+                  padding:0, flexShrink:0, transition:"all .2s ease" }}/>
             );
           })}
         </div>
-      </div>
+      </SettingsRow>
 
-      {/* SimBrief */}
-      <div style={S.row}>
-        <div>
-          <div style={S.label}>SimBrief usernév</div>
-          <div style={S.desc}>Automatikusan betölti az OFP-t induláskor</div>
-        </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <input style={{...S.inp, width:180}}
-            value={settings.sbUser}
-            onChange={e=>save("sbUser",e.target.value)}
-            placeholder="pl. ddnemet"/>
-          <button style={{ background:"#5ec8ff", color:"#070b12", border:"none",
-            borderRadius:8, padding:"7px 16px", fontSize:13, fontWeight:700, cursor:"pointer" }}
-            onClick={onLoadOFP}>Betölt</button>
-        </div>
-      </div>
-
-      {/* Fenix */}
-      <div style={S.row}>
-        <div>
-          <div style={S.label}>Fenix EFB cím</div>
-          <div style={S.desc}>Csak ha fut a Fenix EFB a szimulátorban</div>
-        </div>
-        <input style={{...S.inp, width:230}}
-          value={settings.fenixUrl}
-          onChange={e=>save("fenixUrl",e.target.value)}
-          placeholder="http://192.168.1.x:8080"/>
-      </div>
-
-      {/* Session */}
-      <div style={S.row}>
-        <div>
-          <div style={S.label}>Session kód</div>
-          <div style={S.desc}>Firebase sync azonosító</div>
-        </div>
-        <input style={{...S.inp, width:170}}
-          value={settings.sessionCode}
-          onChange={e=>save("sessionCode",e.target.value)}
-          placeholder="ddnemet-host"/>
-      </div>
-
-      {/* Linkek */}
-      <div style={S.row}>
-        <div style={S.label}>Linkek megnyitása</div>
+      <SettingsRow label="Linkek megnyitása" desc="Shortcutok hova nyíljanak">
         <div style={{ display:"flex", gap:6 }}>
           {[["Böngészőben",false],["App-ban",true]].map(([l,v])=>(
-            <button key={String(v)} style={S.pill(settings.openLinksInApp===v)}
+            <button key={String(v)} style={S_PILL(settings.openLinksInApp===v)}
               onClick={()=>save("openLinksInApp",v)}>{l}</button>
           ))}
         </div>
-      </div>
+      </SettingsRow>
 
-      {/* OFP mód */}
-      <div style={S.row}>
-        <div style={S.label}>OFP megjelenítés</div>
+      <SettingsRow label="Súlyegység" desc="Üzemanyag és tömeg megjelenítés">
+        <div style={{ display:"flex", gap:6 }}>
+          {[["kg","KG"],["lbs","LBS"]].map(([v,l])=>(
+            <button key={v} style={S_PILL((settings.weightUnit||"kg")===v)}
+              onClick={()=>save("weightUnit",v)}>{l}</button>
+          ))}
+        </div>
+      </SettingsRow>
+
+      <SettingsRow label="Időzóna kijelzés" desc="Óra a titlebarban">
+        <div style={{ display:"flex", gap:6 }}>
+          {[["utc","UTC"],["local","Local"],["both","Both"]].map(([v,l])=>(
+            <button key={v} style={S_PILL((settings.clockMode||"utc")===v)}
+              onClick={()=>save("clockMode",v)}>{l}</button>
+          ))}
+        </div>
+      </SettingsRow>
+
+      {/* ── SimBrief / OFP ── */}
+      <SettingsSectionHead label="SimBrief / OFP"/>
+      <SettingsRow label="SimBrief usernév" desc="Dispatch felhasználónév">
+        <div style={{ display:"flex", gap:8 }}>
+          <input style={{...S_INP, width:180}}
+            value={settings.sbUser||""}
+            onChange={e=>save("sbUser",e.target.value)}
+            placeholder="SimBrief felhasználónév"/>
+          <button style={{ background:"var(--cy)", color:"#070b12", border:"none",
+            borderRadius:8, padding:"7px 16px", fontSize:13, fontWeight:700, cursor:"pointer" }}
+            onClick={onLoadOFP}>Betölt</button>
+        </div>
+      </SettingsRow>
+
+      <SettingsRow label="OFP megjelenítés" desc="Dispatch oldal stílusa">
         <div style={{ display:"flex", gap:6 }}>
           {[["simplified","Simplified"],["realistic","Realistic"]].map(([v,l])=>(
-            <button key={v} style={S.pill(settings.ofpMode===v)}
+            <button key={v} style={S_PILL((settings.ofpMode||"simplified")===v)}
               onClick={()=>save("ofpMode",v)}>{l}</button>
           ))}
         </div>
-      </div>
+      </SettingsRow>
 
-      {/* Verzió */}
-      <div style={S.row}>
-        <div style={S.label}>Verzió</div>
+      <SettingsRow label="Auto OFP betöltés" desc="Induláskor automatikusan lekéri a legutóbbi OFP-t">
+        <button style={S_PILL(settings.autoLoadOfp)}
+          onClick={()=>save("autoLoadOfp",!settings.autoLoadOfp)}>
+          {settings.autoLoadOfp ? "BE" : "KI"}
+        </button>
+      </SettingsRow>
+
+      {/* ── Bridge / Kapcsolat ── */}
+      <SettingsSectionHead label="Bridge / Kapcsolat"/>
+      <SettingsRow label="Session kód" desc="Firebase sync azonosító — ezt add meg a mobilon is">
+        <input style={{...S_INP, width:170}}
+          value={settings.sessionCode||""}
+          onChange={e=>save("sessionCode",e.target.value)}
+          placeholder="pl. nev-host"/>
+      </SettingsRow>
+
+      <SettingsRow label="Auto-start Bridge" desc="App indításkor automatikusan elindítja a Bridge-et">
+        <button style={S_PILL(settings.autoStartBridge)}
+          onClick={()=>save("autoStartBridge",!settings.autoStartBridge)}>
+          {settings.autoStartBridge ? "BE" : "KI"}
+        </button>
+      </SettingsRow>
+
+      <SettingsRow label="Bridge mód" desc="Szimulátor kapcsolat típusa">
+        <div style={{ display:"flex", gap:6 }}>
+          {[["simconnect","SimConnect"],["fsuipc","FSUIPC"],["mock","Mock"]].map(([v,l])=>(
+            <button key={v} style={S_PILL((settings.bridgeMode||"simconnect")===v)}
+              onClick={()=>save("bridgeMode",v)}>{l}</button>
+          ))}
+        </div>
+      </SettingsRow>
+
+      {/* ── Külső alkalmazások ── */}
+      <SettingsSectionHead label="Külső alkalmazások"/>
+      <SettingsRow label="Fenix EFB URL" desc="Ha fut a Fenix EFB a szimulátorban">
+        <input style={{...S_INP, width:230}}
+          value={settings.fenixUrl||""}
+          onChange={e=>save("fenixUrl",e.target.value)}
+          placeholder="http://192.168.1.x:8080"/>
+      </SettingsRow>
+
+      <SettingsRow label="Navigraph Charts URL" desc="Egyedi URL ha szükséges">
+        <input style={{...S_INP, width:230}}
+          value={settings.navigraphUrl||""}
+          onChange={e=>save("navigraphUrl",e.target.value)}
+          placeholder="https://charts.navigraph.com"/>
+      </SettingsRow>
+
+      {/* ── Térkép ── */}
+      <SettingsSectionHead label="Térkép"/>
+      <SettingsRow label="Alapértelmezett map layer" desc="Ground tab induláskor melyik réteg legyen">
+        <div style={{ display:"flex", gap:6 }}>
+          {[["hybrid","Hybrid"],["chart","Chart"],["satellite","Satellite"]].map(([v,l])=>(
+            <button key={v} style={S_PILL((settings.defaultMapLayer||"hybrid")===v)}
+              onClick={()=>save("defaultMapLayer",v)}>{l}</button>
+          ))}
+        </div>
+      </SettingsRow>
+
+      <SettingsRow label="Útvonal vonalszín" desc="Map tab route line színe">
+        <div style={{ display:"flex", gap:6 }}>
+          {[["#5ec8ff","Cyan"],["#52e3b0","Green"],["#ffb454","Amber"],["#a78bfa","Purple"]].map(([v,l])=>(
+            <button key={v} onClick={()=>save("routeColor",v)}
+              style={{ width:24, height:24, borderRadius:"50%", background:v, border:"none",
+                cursor:"pointer", border:(settings.routeColor||"#5ec8ff")===v?"3px solid white":"2px solid transparent" }}/>
+          ))}
+        </div>
+      </SettingsRow>
+
+      {/* ── Értesítések ── */}
+      <SettingsSectionHead label="Értesítések"/>
+      <SettingsRow label="Leszállás értesítés" desc="Push értesítés leszálláskor (mobilon)">
+        <button style={S_PILL(settings.notifyLanding !== false)}
+          onClick={()=>save("notifyLanding",!settings.notifyLanding)}>
+          {settings.notifyLanding !== false ? "BE" : "KI"}
+        </button>
+      </SettingsRow>
+
+      <SettingsRow label="TOD értesítés" desc="Descent figyelmeztetés 10 perccel előtte">
+        <button style={S_PILL(settings.notifyTod !== false)}
+          onClick={()=>save("notifyTod",!settings.notifyTod)}>
+          {settings.notifyTod !== false ? "BE" : "KI"}
+        </button>
+      </SettingsRow>
+
+      {/* ── Rendszer ── */}
+      <SettingsSectionHead label="Rendszer"/>
+      <SettingsRow label="Verzió">
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <span style={{ fontVariantNumeric:"tabular-nums", fontSize:12, color:"#5a7a96" }}>
+          <span style={{ fontVariantNumeric:"tabular-nums", fontSize:12, color:"var(--dim)" }}>
             {ver ? `${ver.codename} · ${ver.version}` : "betöltés..."}
           </span>
           {ver?.channel==="dev" && (
@@ -2309,36 +2387,36 @@ const SettingsTab = React.memo(function SettingsTab({settings, save, onLoadOFP})
               background:"rgba(255,180,84,.12)", border:"1px solid rgba(255,180,84,.25)",
               color:"#ffb454" }}>DEV</span>
           )}
-          <button style={{ background:"#111c2b", color:"#5a7a96", border:"1px solid #1c2d42",
+          <button style={{ background:"#111c2b", color:"var(--dim)", border:"1px solid var(--line)",
             borderRadius:8, padding:"4px 10px", fontSize:11, cursor:"pointer" }}
             onClick={()=>setDevOpen(!devOpen)}>
             {devOpen ? "▲ Dev" : "⚙ Dev"}
           </button>
         </div>
-      </div>
+      </SettingsRow>
 
       {/* Dev options */}
       {devOpen && (
-        <div style={{ background:"#0c1520", border:"1px solid #1c2d42",
-          borderRadius:12, padding:14, display:"flex", flexDirection:"column", gap:10 }}>
+        <div className="card anim-down" style={{ padding:14, borderColor:"rgba(255,180,84,.2)",
+          background:"rgba(255,180,84,.03)", display:"flex", flexDirection:"column", gap:10 }}>
           <div style={{ fontSize:12, fontWeight:600, color:"#ffb454" }}>⚙ Developer Options</div>
           <div style={{ display:"flex", gap:8, alignItems:"flex-end" }}>
             <div style={{ flex:1 }}>
-              <div style={{ fontSize:9, color:"#5a7a96", letterSpacing:1, marginBottom:4 }}>CODENAME</div>
-              <input style={{...S.inp, width:"100%"}}
+              <div style={{ fontSize:9, color:"var(--dim)", letterSpacing:1, marginBottom:4 }}>CODENAME</div>
+              <input style={{...S_INP, width:"100%"}}
                 value={editCn} onChange={e=>setEditCn(e.target.value)}
                 placeholder="pl. Tahoe"/>
             </div>
             <div>
-              <div style={{ fontSize:9, color:"#5a7a96", letterSpacing:1, marginBottom:4 }}>CHANNEL</div>
+              <div style={{ fontSize:9, color:"var(--dim)", letterSpacing:1, marginBottom:4 }}>CHANNEL</div>
               <div style={{ display:"flex", gap:6 }}>
                 {["release","dev"].map(ch=>(
-                  <button key={ch} style={S.pill(editCh===ch)}
+                  <button key={ch} style={S_PILL(editCh===ch)}
                     onClick={()=>setEditCh(ch)}>{ch}</button>
                 ))}
               </div>
             </div>
-            <button style={{ background:"#5ec8ff", color:"#070b12", border:"none",
+            <button style={{ background:"var(--cy)", color:"#070b12", border:"none",
               borderRadius:8, padding:"7px 16px", fontSize:12, fontWeight:700,
               cursor:"pointer", alignSelf:"flex-end" }}
               onClick={async()=>{
@@ -2347,7 +2425,7 @@ const SettingsTab = React.memo(function SettingsTab({settings, save, onLoadOFP})
                 if (v) setVer(v);
               }}>Mentés</button>
           </div>
-          <div style={{ fontSize:11, color:"#5a7a96", lineHeight:1.6 }}>
+          <div style={{ fontSize:11, color:"var(--dim)", lineHeight:1.6 }}>
             A codename az auto-updater alapja. DEV csatornán megnyílik a dev console.
           </div>
         </div>
@@ -2355,3 +2433,666 @@ const SettingsTab = React.memo(function SettingsTab({settings, save, onLoadOFP})
     </div>
   );
 });
+
+/* ══ BRIDGE TAB ══════════════════════════════════════════════════ */
+function BridgeTab({ live, sessionCode }) {
+  const [running, setRunning] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr]         = useState("");
+  const connected = live != null;
+
+  useEffect(() => {
+    invoke("bridge_status").then(r => setRunning(r.running)).catch(()=>{});
+    const t = setInterval(() => {
+      invoke("bridge_status").then(r => setRunning(r.running)).catch(()=>{});
+    }, 3000);
+    return () => clearInterval(t);
+  }, []);
+
+  async function toggle() {
+    setLoading(true); setErr("");
+    try {
+      if (running) {
+        await invoke("bridge_stop");
+        setRunning(false);
+      } else {
+        await invoke("bridge_start");
+        setRunning(true);
+      }
+    } catch(e) { setErr(String(e)); }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+
+      {/* Start / Stop kártya */}
+      <div className="card anim-up" style={{ padding:"24px 20px", textAlign:"center" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10, marginBottom:18 }}>
+          <div style={{
+            width:12, height:12, borderRadius:"50%",
+            background: connected ? "var(--gn)" : running ? "var(--am)" : "var(--rd)",
+            boxShadow: connected ? "0 0 8px 3px rgba(82,227,176,.4)" : "none",
+            transition:"all .4s"
+          }}/>
+          <div style={{ fontSize:13, fontWeight:700,
+            color: connected ? "var(--gn)" : running ? "var(--am)" : "var(--dim)" }}>
+            {connected ? "Sim csatlakozva" : running ? "Bridge fut, sim vár…" : "Bridge leállítva"}
+          </div>
+        </div>
+
+        <button onClick={toggle} disabled={loading}
+          style={{
+            fontSize:16, fontWeight:800, padding:"14px 48px", borderRadius:14, border:"1.5px solid",
+            cursor: loading ? "wait" : "pointer",
+            background: running ? "rgba(240,96,128,.1)"  : "rgba(82,227,176,.1)",
+            borderColor: running ? "rgba(240,96,128,.4)" : "rgba(82,227,176,.4)",
+            color:       running ? "var(--rd)"           : "var(--gn)",
+            transition:"all .2s",
+          }}>
+          {loading ? "⏳" : running ? "⏹  Stop" : "▶  Start"}
+        </button>
+
+        {err && <div style={{ marginTop:10, fontSize:11, color:"var(--rd)", lineHeight:1.5 }}>{err}</div>}
+
+        <div style={{ marginTop:14, fontSize:10, color:"var(--dim)" }}>
+          Session: <span style={{ color:"var(--cy)", fontFamily:"monospace" }}>{sessionCode || "—"}</span>
+        </div>
+      </div>
+
+      {/* Live adatok ha csatlakozva */}
+      {connected && (
+        <div className="card anim-up" style={{ animationDelay:"60ms" }}>
+          <div style={{ padding:"12px 16px", borderBottom:"1px solid var(--line)", fontSize:12,
+            fontWeight:600, color:"var(--tx)" }}>{live.aircraftTitle || "Repülő"}</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:0 }}>
+            {[
+              ["ALT", `${Math.round(live.altFt||0).toLocaleString()} ft`, "var(--cy)"],
+              ["GS",  `${Math.round(live.gsKt||0)} kt`,                   "var(--am)"],
+              ["VS",  `${live.vsFpm>=0?"+":""}${Math.round(live.vsFpm||0)} fpm`,
+                       live.vsFpm < -100 ? "var(--rd)" : "var(--gn)"],
+            ].map(([l,v,c], i)=>(
+              <div key={l} style={{ padding:"12px", textAlign:"center",
+                borderRight: i<2 ? "1px solid var(--line)" : "none" }}>
+                <div style={{ fontSize:9, color:"var(--dim)", letterSpacing:1 }}>{l}</div>
+                <div style={{ fontSize:15, fontWeight:800, color:c, marginTop:3 }}>{v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══ LANDING TAB ═════════════════════════════════════════════════ */
+function LandingTab({ sessionCode }) {
+  const [landing, setLanding] = useState(null);
+  const [logbook, setLogbook] = useState([]);
+
+  useEffect(() => {
+    const lb = ls.get("xdeck_logbook", []);
+    setLogbook(lb);
+    if (!sessionCode) return;
+    const r = ref(getDB(), `sessions/${sessionCode}/lastLanding`);
+    const unsub = onValue(r, s => { const v = s.val(); if (v) setLanding(v); });
+    return unsub;
+  }, [sessionCode]);
+
+  const qLabel = fpm => {
+    const a = Math.abs(fpm);
+    if (a <= 200) return ["Greaser", "var(--gn)"];
+    if (a <= 400) return ["Smooth",  "var(--cy)"];
+    if (a <= 600) return ["Firm",    "var(--am)"];
+    if (a <= 900) return ["Hard",    "var(--rd)"];
+    return           ["Bounce",  "var(--pu)"];
+  };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      <div className="section-label">Utolsó leszállás</div>
+
+      {landing ? (
+        <div className="card anim-up" style={{ padding:"18px 16px" }}>
+          {(() => {
+            const [ql, qc] = qLabel(landing.fpm);
+            return (
+              <>
+                <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
+                  <div style={{ fontSize:28, fontWeight:800, color:qc }}>{Math.abs(landing.fpm)}</div>
+                  <div>
+                    <div style={{ fontSize:10, color:"var(--dim)", letterSpacing:1 }}>FPM</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:qc }}>{ql}</div>
+                  </div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+                  {[
+                    ["GS",      `${landing.gs} kt`,            "var(--am)"],
+                    ["IAS",     `${landing.ias||"—"} kt`,      "var(--cy)"],
+                    ["Heading", `${landing.headingDeg||"—"}°`, "var(--pu)"],
+                  ].map(([l,v,c])=>(
+                    <div key={l} style={{ background:"var(--p2)", borderRadius:10, padding:"8px 10px",
+                      border:"1px solid var(--line)", textAlign:"center" }}>
+                      <div style={{ fontSize:9, color:"var(--dim)", letterSpacing:1 }}>{l}</div>
+                      <div style={{ fontSize:13, fontWeight:700, color:c, marginTop:2 }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+                {landing.aircraftTitle && (
+                  <div style={{ marginTop:10, fontSize:10, color:"var(--dim)" }}>{landing.aircraftTitle}</div>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      ) : (
+        <div className="card" style={{ padding:32, textAlign:"center", color:"var(--dim)", fontSize:13 }}>
+          <TrendingDown size={28} color="#1e3a5f" style={{ marginBottom:8 }}/>
+          <div>Nincs adat — indítsd el a bridge-et és szállj le.</div>
+        </div>
+      )}
+
+      {logbook.length > 0 && (
+        <>
+          <div className="section-label" style={{ marginTop:4 }}>Logbook</div>
+          {logbook.slice(0,10).map((e, i) => {
+            const [ql, qc] = qLabel(e.fpm);
+            return (
+              <div key={e.ts} className="card anim-up"
+                style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:12,
+                  animationDelay:`${i*40}ms` }}>
+                <div style={{ fontSize:15, fontWeight:800, color:qc, width:48, flexShrink:0 }}>
+                  {Math.abs(e.fpm)}
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:11, fontWeight:600 }}>
+                    {e.dep && e.arr ? `${e.dep} → ${e.arr}` : "—"}
+                  </div>
+                  <div style={{ fontSize:10, color:"var(--dim)", overflow:"hidden",
+                    textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    {e.aircraft || "—"} · {ql} · {e.gs} kt GS
+                  </div>
+                </div>
+                <div style={{ fontSize:10, color:"var(--dim)", flexShrink:0 }}>
+                  {new Date(e.ts).toLocaleDateString("hu")}
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ══ LOGBOOK TAB ═════════════════════════════════════════════════ */
+function LogbookTab() {
+  const [entries, setEntries] = useState(() => ls.get("xdeck_logbook", []));
+
+  const qLabel = fpm => {
+    const a = Math.abs(fpm);
+    if (a <= 200) return ["Greaser", "var(--gn)"];
+    if (a <= 400) return ["Smooth",  "var(--cy)"];
+    if (a <= 600) return ["Firm",    "var(--am)"];
+    if (a <= 900) return ["Hard",    "var(--rd)"];
+    return           ["Bounce",  "var(--pu)"];
+  };
+
+  const clear = () => {
+    if (!confirm("Törölni az összes leszállást?")) return;
+    ls.set("xdeck_logbook", []);
+    setEntries([]);
+  };
+
+  if (!entries.length) return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      <div className="section-label">Logbook</div>
+      <div className="card" style={{ padding:32, textAlign:"center", color:"var(--dim)", fontSize:13 }}>
+        <Book size={28} color="#1e3a5f" style={{ marginBottom:8 }}/>
+        <div>Még nincs rögzített leszállás.</div>
+      </div>
+    </div>
+  );
+
+  const avg = Math.round(entries.reduce((s,e)=>s+Math.abs(e.fpm),0)/entries.length);
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div className="section-label" style={{ margin:0 }}>Logbook — {entries.length} repülés</div>
+        <button className="btn-ghost" onClick={clear} style={{ fontSize:10, padding:"4px 10px" }}>
+          Törlés
+        </button>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+        {[
+          ["Repülések", entries.length, "var(--cy)"],
+          ["Átlag FPM", avg,            avg<=400?"var(--gn)":avg<=700?"var(--am)":"var(--rd)"],
+          ["Legjobb",   Math.min(...entries.map(e=>Math.abs(e.fpm))), "var(--gn)"],
+        ].map(([l,v,c])=>(
+          <div key={l} className="card anim-up" style={{ padding:"10px 12px", textAlign:"center" }}>
+            <div style={{ fontSize:9, color:"var(--dim)", letterSpacing:1 }}>{l}</div>
+            <div style={{ fontSize:16, fontWeight:800, color:c, marginTop:2 }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {entries.map((e, i) => {
+        const [ql, qc] = qLabel(e.fpm);
+        return (
+          <div key={e.ts} className="card anim-up"
+            style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:12,
+              borderLeft:`3px solid ${qc}`, animationDelay:`${i*30}ms` }}>
+            <div style={{ fontSize:16, fontWeight:800, color:qc, width:50, flexShrink:0 }}>
+              {Math.abs(e.fpm)}
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:12, fontWeight:600 }}>
+                {e.dep && e.arr ? `${e.dep} → ${e.arr}` : "Ismeretlen útvonal"}
+              </div>
+              <div style={{ fontSize:10, color:"var(--dim)", marginTop:2,
+                overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                {e.aircraft || "—"} · {ql} · {e.gs} kt GS
+                {e.ftMin ? ` · ${Math.floor(e.ftMin/60)}h ${e.ftMin%60}m` : ""}
+              </div>
+            </div>
+            <div style={{ fontSize:10, color:"var(--dim)", flexShrink:0 }}>
+              {new Date(e.ts).toLocaleDateString("hu")}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ══ DICT TAB ════════════════════════════════════════════════════ */
+const CAT_COLORS = {
+  nav:"#5ec8ff",alt:"#52e3b0",spd:"#ffb454",atc:"#a78bfa",
+  wx:"#7dd3fc",sys:"#f06080",disp:"#c084fc",eng:"#fb923c",
+  wgt:"#e6965c",gnd:"#4ade80",ops:"#c4d6ff",cert:"#fbbf24",
+  aero:"#a3e635",emer:"#f43f5e",
+};
+const CAT_NAMES = {
+  nav:"Navigáció & Eljárások",alt:"Magasságmérés",spd:"Sebességek",
+  atc:"ATC & Kommunikáció",wx:"Időjárás",sys:"Fedélzeti Rendszerek",
+  disp:"Kijelzők & Műszerek",eng:"Motor & Teljesítmény",wgt:"Tömeg & Egyensúly",
+  gnd:"Repülőtér & Terep",ops:"Repülési Ops",cert:"Engedélyek",
+  aero:"Aerodinamika",emer:"Vészhelyzet",
+};
+
+function DictTab() {
+  const [terms, setTerms]   = useState(null);
+  const [q, setQ]           = useState("");
+  const [err, setErr]       = useState(null);
+
+  useEffect(() => {
+    fetch("/dict.json").then(r=>r.json()).then(setTerms).catch(()=>setErr("dict.json nem töltődött be"));
+  }, []);
+
+  const filtered = terms
+    ? (q.trim()
+        ? terms.filter(t => {
+            const lq = q.toLowerCase();
+            return t.a?.toLowerCase().includes(lq) || t.t?.toLowerCase().includes(lq) || t.d?.toLowerCase().includes(lq);
+          })
+        : terms)
+    : [];
+
+  const grouped = !q.trim() && filtered.length
+    ? filtered.reduce((acc, t) => { (acc[t.c] = acc[t.c]||[]).push(t); return acc; }, {})
+    : null;
+
+  if (err) return (
+    <div className="card" style={{ padding:24, color:"var(--rd)", fontSize:13 }}>{err}</div>
+  );
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+      <div className="section-label">Aviatikai Szótár</div>
+
+      <input
+        value={q} onChange={e=>setQ(e.target.value)}
+        placeholder="Keresés (pl. ILS, leszállás, sebesség…)"
+        style={{ width:"100%", background:"var(--p2)", border:"1px solid var(--line)",
+          color:"var(--tx)", borderRadius:8, padding:"9px 12px", fontSize:13, outline:"none",
+          boxSizing:"border-box" }}
+      />
+
+      {!terms && (
+        <div style={{ textAlign:"center", padding:32, color:"var(--dim)" }}>
+          <Loader2 size={20} className="spin"/></div>
+      )}
+
+      {terms && (
+        <div style={{ fontSize:10, color:"var(--dim)", textAlign:"right" }}>
+          {filtered.length} / {terms.length} kifejezés
+        </div>
+      )}
+
+      {grouped
+        ? Object.entries(grouped).map(([cat, list]) => (
+            <div key={cat}>
+              <div className="section-label">{CAT_NAMES[cat]||cat} ({list.length})</div>
+              {list.map(t => <DictCard key={t.a} t={t}/>)}
+            </div>
+          ))
+        : filtered.map(t => <DictCard key={t.a} t={t}/>)
+      }
+
+      {terms && !filtered.length && (
+        <div className="card" style={{ padding:24, textAlign:"center", color:"var(--dim)", fontSize:13 }}>
+          Nincs találat: „{q}"
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DictCard({ t }) {
+  const cc = CAT_COLORS[t.c] || "var(--cy)";
+  return (
+    <div className="card anim-up"
+      style={{ padding:"10px 14px", marginBottom:6, borderLeft:`3px solid ${cc}` }}>
+      <div style={{ display:"flex", alignItems:"baseline", gap:10, marginBottom:3 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:cc, minWidth:60, flexShrink:0 }}>{t.a}</div>
+        <div style={{ fontSize:10, color:"var(--dim)", flex:1 }}>{t.t}</div>
+      </div>
+      <div style={{ fontSize:12, color:"var(--tx)", lineHeight:1.55 }}>{t.d}</div>
+    </div>
+  );
+}
+
+/* ══ MOD MANAGER ═════════════════════════════════════════════════ */
+
+const MOD_BRAND_COLORS = {
+  "pmdg":         "#1a6ed4",
+  "flybywire":    "#5ec8ff",
+  "fnx":          "#ff7c2a",
+  "aerosoft":     "#e53e3e",
+  "fsdreamteam":  "#d69e2e",
+  "orbx":         "#38a169",
+  "bksq":         "#805ad5",
+  "msfs":         "#a78bfa",
+  "asobo":        "#52e3b0",
+};
+
+const MOD_TYPE_LABELS = {
+  "AIRCRAFT": "Aircraft",
+  "LIVERY":   "Livery",
+  "SCENERY":  "Scenery",
+  "AIRPORT":  "Airport",
+  "SIMOBJECT":"SimObject",
+  "CUSTOM":   "Utility",
+};
+
+function modBrandColor(folder) {
+  const prefix = folder.toLowerCase().replace(/^_disabled_/, "");
+  for (const [k,v] of Object.entries(MOD_BRAND_COLORS)) {
+    if (prefix.startsWith(k)) return v;
+  }
+  return "var(--cy)";
+}
+
+function modTypeIcon(ct) {
+  switch((ct||"").toUpperCase()) {
+    case "AIRCRAFT":  return Plane;
+    case "LIVERY":    return Activity;
+    case "SCENERY":
+    case "AIRPORT":   return Layers;
+    default:          return PackageOpen;
+  }
+}
+
+function fmtSize(bytes) {
+  if (!bytes) return "";
+  if (bytes < 1024*1024) return `${(bytes/1024).toFixed(0)} KB`;
+  if (bytes < 1024*1024*1024) return `${(bytes/1024/1024).toFixed(1)} MB`;
+  return `${(bytes/1024/1024/1024).toFixed(2)} GB`;
+}
+
+const MOD_FILTERS = ["All","Aircraft","Livery","Scenery","Utility"];
+
+function ModsTab() {
+  const [folder, setFolder]     = useState("");
+  const [mods, setMods]         = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [err, setErr]           = useState("");
+  const [q, setQ]               = useState("");
+  const [filter, setFilter]     = useState("All");
+  const [delConfirm, setDelConfirm] = useState(null);
+  const [busy, setBusy]         = useState({});
+
+  async function detect() {
+    setLoading(true); setErr("");
+    try {
+      const result = await invoke("mods_get_community_folder");
+      if (result.path) { setFolder(result.path); await loadMods(result.path); }
+      else setErr("Nem találtam automatikusan a community mappát. Add meg kézzel.");
+    } catch(e) { setErr(String(e)); }
+    setLoading(false);
+  }
+
+  async function loadMods(path) {
+    setLoading(true); setErr("");
+    try {
+      const list = await invoke("mods_list", { path });
+      setMods(list);
+    } catch(e) { setErr(String(e)); }
+    setLoading(false);
+  }
+
+  async function toggleMod(mod) {
+    setBusy(b => ({...b, [mod.folder]: true}));
+    try {
+      await invoke("mod_toggle", { path: mod.path, enabled: !mod.enabled });
+      await loadMods(folder);
+    } catch(e) { setErr(String(e)); }
+    setBusy(b => ({...b, [mod.folder]: false}));
+  }
+
+  async function deleteMod(mod) {
+    setBusy(b => ({...b, [mod.folder]: true}));
+    try {
+      await invoke("mod_delete", { path: mod.path });
+      setMods(m => m.filter(x => x.folder !== mod.folder));
+    } catch(e) { setErr(String(e)); }
+    setBusy(b => ({...b, [mod.folder]: false}));
+    setDelConfirm(null);
+  }
+
+  useEffect(() => { detect(); }, []);
+
+  const filtered = (mods || []).filter(m => {
+    if (filter !== "All") {
+      const ct = (m.contentType || "").toUpperCase();
+      if (filter === "Aircraft" && ct !== "AIRCRAFT") return false;
+      if (filter === "Livery"   && ct !== "LIVERY") return false;
+      if (filter === "Scenery"  && ct !== "SCENERY" && ct !== "AIRPORT") return false;
+      if (filter === "Utility"  && ct !== "CUSTOM" && ct !== "SIMOBJECT" && ct !== "") return false;
+    }
+    if (q.trim()) {
+      const lq = q.toLowerCase();
+      return m.title.toLowerCase().includes(lq) || m.folder.toLowerCase().includes(lq) || (m.creator||"").toLowerCase().includes(lq);
+    }
+    return true;
+  });
+
+  const enabledCount  = (mods||[]).filter(m => m.enabled).length;
+  const disabledCount = (mods||[]).filter(m => !m.enabled).length;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:12, height:"100%" }}>
+
+      {/* Header */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
+        <div>
+          <div style={{ fontSize:18, fontWeight:700, display:"flex", alignItems:"center", gap:8 }}>
+            <PackageOpen size={20} color="#ff9d4d"/> Mod Manager
+          </div>
+          <div style={{ fontSize:11, color:"var(--dim)", marginTop:2 }}>
+            MSFS 2020/2024 community mappa kezelő
+          </div>
+        </div>
+        <button className="btn-ghost" onClick={()=>loadMods(folder)} disabled={!folder||loading}>
+          <RefreshCw size={13} className={loading?"spin":""}/>
+          Frissítés
+        </button>
+      </div>
+
+      {/* Folder selector */}
+      <div className="card" style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+        <FolderOpen size={15} color="var(--dim)" style={{ flexShrink:0 }}/>
+        <input className="inp" value={folder} onChange={e=>setFolder(e.target.value)}
+          placeholder="C:\Users\...\Community"
+          style={{ flex:1, fontSize:11, padding:"5px 8px", fontFamily:"monospace" }}
+          onBlur={()=>folder&&loadMods(folder)}/>
+        <button className="btn-ghost" onClick={detect} style={{ flexShrink:0 }}>
+          Auto-detect
+        </button>
+      </div>
+
+      {/* Stats bar */}
+      {mods !== null && (
+        <div style={{ display:"flex", alignItems:"center", gap:16, fontSize:11, color:"var(--dim)", flexShrink:0 }}>
+          <span><b style={{ color:"var(--tx)" }}>{mods.length}</b> total mod</span>
+          <span><b style={{ color:"var(--gn)" }}>{enabledCount}</b> aktív</span>
+          {disabledCount > 0 && <span><b style={{ color:"var(--rd)" }}>{disabledCount}</b> letiltva</span>}
+          <div style={{ flex:1 }}/>
+          {/* Filter chips */}
+          <div style={{ display:"flex", gap:4 }}>
+            {MOD_FILTERS.map(f => (
+              <button key={f} className={`btn-pill ${filter===f?"active":""}`}
+                onClick={()=>setFilter(f)} style={{ fontSize:10, padding:"3px 10px" }}>
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Search */}
+      {mods !== null && (
+        <div style={{ position:"relative", flexShrink:0 }}>
+          <Search size={13} style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--dim)", pointerEvents:"none" }}/>
+          <input className="inp" value={q} onChange={e=>setQ(e.target.value)}
+            placeholder="Keresés név, creator, mappa alapján…"
+            style={{ paddingLeft:30 }}/>
+        </div>
+      )}
+
+      {/* Error */}
+      {err && (
+        <div className="card" style={{ padding:"10px 14px", border:"1px solid rgba(240,96,128,.3)",
+          background:"rgba(240,96,128,.06)", color:"var(--rd)", fontSize:12, flexShrink:0 }}>
+          {err}
+        </div>
+      )}
+
+      {/* Empty/loading state */}
+      {loading && !mods && (
+        <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", color:"var(--dim)", gap:10 }}>
+          <Loader2 size={20} className="spin"/> Betöltés…
+        </div>
+      )}
+
+      {/* No folder */}
+      {!loading && !mods && !err && (
+        <div className="card" style={{ flex:1, display:"flex", flexDirection:"column",
+          alignItems:"center", justifyContent:"center", gap:12, textAlign:"center" }}>
+          <FolderOpen size={36} color="var(--dim)"/>
+          <div style={{ fontSize:14, fontWeight:600 }}>MSFS community mappa</div>
+          <div style={{ fontSize:12, color:"var(--dim)", maxWidth:320, lineHeight:1.6 }}>
+            Kattints az <b>Auto-detect</b> gombra, vagy add meg kézzel az MSFS community mappa elérési útját.
+          </div>
+          <button className="btn-primary" onClick={detect}>
+            <Search size={14}/> Auto-detect
+          </button>
+        </div>
+      )}
+
+      {/* Mod list */}
+      {mods !== null && !loading && (
+        <div style={{ flex:1, overflowY:"auto", display:"flex", flexDirection:"column", gap:4 }}>
+          {filtered.length === 0 && (
+            <div className="card" style={{ padding:24, textAlign:"center", color:"var(--dim)", fontSize:12 }}>
+              {q ? `Nincs találat: „${q}"` : "Nincs mod ebben a mappában."}
+            </div>
+          )}
+          {filtered.map(mod => {
+            const color = modBrandColor(mod.folder);
+            const TypeIcon = modTypeIcon(mod.contentType);
+            const isBusy = busy[mod.folder];
+            return (
+              <div key={mod.folder} className="card"
+                style={{ padding:"10px 12px", display:"flex", alignItems:"center", gap:10,
+                  opacity: mod.enabled ? 1 : 0.5,
+                  borderLeft: `3px solid ${mod.enabled ? color : "var(--line)"}`,
+                }}>
+                {/* Icon */}
+                <div style={{ width:32, height:32, borderRadius:8, flexShrink:0,
+                  background: `${color}18`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <TypeIcon size={15} color={color}/>
+                </div>
+
+                {/* Info */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:600, whiteSpace:"nowrap",
+                    overflow:"hidden", textOverflow:"ellipsis" }}>
+                    {mod.title}
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:2 }}>
+                    {mod.creator && <span style={{ fontSize:10, color:"var(--dim)" }}>{mod.creator}</span>}
+                    {mod.version && <span style={{ fontSize:10, color:"var(--dim)" }}>v{mod.version}</span>}
+                    {mod.contentType && (
+                      <span style={{ fontSize:9, fontWeight:700, letterSpacing:.5,
+                        color:color, background:`${color}18`, borderRadius:4, padding:"1px 5px" }}>
+                        {MOD_TYPE_LABELS[mod.contentType?.toUpperCase()] || mod.contentType}
+                      </span>
+                    )}
+                    {mod.size > 0 && <span style={{ fontSize:10, color:"var(--dim)" }}>{fmtSize(mod.size)}</span>}
+                  </div>
+                  <div style={{ fontSize:9, color:"var(--p3)", marginTop:1, fontFamily:"monospace",
+                    whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                    {mod.folder}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
+                  {/* Enable/disable toggle */}
+                  <button className="btn-icon" onClick={()=>toggleMod(mod)} disabled={isBusy}
+                    title={mod.enabled ? "Letiltás" : "Engedélyezés"}
+                    style={{ color: mod.enabled ? "var(--gn)" : "var(--rd)" }}>
+                    {isBusy ? <Loader2 size={15} className="spin"/> :
+                      mod.enabled ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
+                  </button>
+
+                  {/* Delete */}
+                  {delConfirm === mod.folder ? (
+                    <div style={{ display:"flex", gap:3 }}>
+                      <button className="btn-icon" onClick={()=>deleteMod(mod)} disabled={isBusy}
+                        style={{ color:"var(--rd)" }} title="Biztos törlés">
+                        <Check size={14}/>
+                      </button>
+                      <button className="btn-icon" onClick={()=>setDelConfirm(null)}
+                        style={{ color:"var(--dim)" }} title="Mégsem">
+                        <X size={14}/>
+                      </button>
+                    </div>
+                  ) : (
+                    <button className="btn-icon" onClick={()=>setDelConfirm(mod.folder)}
+                      title="Törlés" style={{ color:"var(--dim)" }}>
+                      <Trash2 size={14}/>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

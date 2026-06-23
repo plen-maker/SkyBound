@@ -150,14 +150,14 @@ jobs:
       - name: Rename APKs
         run: |
           OUT=mobile/android/app/build/outputs/apk
-          cp "$OUT/modern/release/app-modern-release.apk" "$OUT/Xdeck-EFB-modern.apk"
-          cp "$OUT/legacy/release/app-legacy-release.apk" "$OUT/Xdeck-EFB-legacy.apk"
+          cp "$OUT/modern/release/app-modern-release.apk" "$OUT/SkyBound-EFB-modern.apk"
+          cp "$OUT/legacy/release/app-legacy-release.apk" "$OUT/SkyBound-EFB-legacy.apk"
       - name: Upload APKs to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag_name }}
           files: |
-            mobile/android/app/build/outputs/apk/Xdeck-EFB-modern.apk
-            mobile/android/app/build/outputs/apk/Xdeck-EFB-legacy.apk
+            mobile/android/app/build/outputs/apk/SkyBound-EFB-modern.apk
+            mobile/android/app/build/outputs/apk/SkyBound-EFB-legacy.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

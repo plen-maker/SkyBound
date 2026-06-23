@@ -2,6 +2,20 @@ use tauri::Manager;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
+use tokio::process::{Child, Command as TokioCommand};
+
+struct BridgeProc {
+    bridge: Option<Child>,
+    proxy:  Option<Child>,
+}
+impl BridgeProc {
+    fn new() -> Self { Self { bridge: None, proxy: None } }
+}
+
+struct AppState {
+    bridge: Mutex<BridgeProc>,
+}
 
 fn settings_path() -> PathBuf {
     dirs::home_dir().unwrap_or_default().join(".skybound.json")
@@ -146,6 +160,7 @@ async fn fetch_ofp(username: String) -> serde_json::Value {
                         .or_else(|| g["air_distance"].as_str().and_then(|s| s.parse::<f64>().ok())),
                     "ete": ete,
                     "fixes": fixes,
+                    "ofpText": d["text"]["plan_text"].as_str().unwrap_or("").to_string(),
                 }})
             }
         }
@@ -185,10 +200,232 @@ async fn check_update() -> serde_json::Value {
     }
 }
 
+// ── Mod Manager commands ──────────────────────────────────────────
+
+fn parse_installed_packages_path(opt_path: &PathBuf) -> Option<PathBuf> {
+    let content = fs::read_to_string(opt_path).ok()?;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("InstalledPackagesPath") {
+            // Format: InstalledPackagesPath "C:\path\to\packages"
+            if let Some(start) = trimmed.find('"') {
+                let rest = &trimmed[start+1..];
+                if let Some(end) = rest.rfind('"') {
+                    return Some(PathBuf::from(&rest[..end]));
+                }
+            }
+        }
+    }
+    None
+}
+
+#[tauri::command]
+fn mods_get_community_folder() -> serde_json::Value {
+    let local = dirs::data_local_dir().unwrap_or_default();
+    let config = dirs::config_dir().unwrap_or_default();
+
+    let cfg_opts = [
+        local.join("Packages/Microsoft.FlightSimulator_8wekyb3d8bbwe/LocalCache/UserCfg.opt"),
+        config.join("Microsoft Flight Simulator/UserCfg.opt"),
+        local.join("Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/UserCfg.opt"),
+        config.join("Microsoft Flight Simulator 2024/UserCfg.opt"),
+    ];
+
+    for opt in &cfg_opts {
+        if opt.exists() {
+            if let Some(packages) = parse_installed_packages_path(opt) {
+                let community = packages.join("Community");
+                if community.exists() {
+                    return serde_json::json!({ "path": community.to_string_lossy() });
+                }
+            }
+        }
+    }
+
+    let defaults = [
+        local.join("Packages/Microsoft.FlightSimulator_8wekyb3d8bbwe/LocalCache/Packages/Community"),
+        config.join("Microsoft Flight Simulator/Packages/Community"),
+        local.join("Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community"),
+        config.join("Microsoft Flight Simulator 2024/Packages/Community"),
+    ];
+
+    for p in &defaults {
+        if p.exists() {
+            return serde_json::json!({ "path": p.to_string_lossy() });
+        }
+    }
+
+    serde_json::json!({ "path": null })
+}
+
+fn dir_size_bytes(path: &PathBuf) -> u64 {
+    let mut total = 0u64;
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                total += dir_size_bytes(&p);
+            } else if let Ok(meta) = entry.metadata() {
+                total += meta.len();
+            }
+        }
+    }
+    total
+}
+
+#[tauri::command]
+fn mods_list(path: String) -> serde_json::Value {
+    let dir = PathBuf::from(&path);
+    let mut mods: Vec<serde_json::Value> = vec![];
+    let entries = match fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(e) => return serde_json::json!({ "error": e.to_string() }),
+    };
+    for entry in entries.flatten() {
+        let mod_dir = entry.path();
+        if !mod_dir.is_dir() { continue; }
+        let folder_name = mod_dir.file_name().unwrap_or_default().to_string_lossy().to_string();
+        // Skip hidden/system dirs
+        if folder_name.starts_with('.') { continue; }
+
+        let manifest: serde_json::Value = fs::read_to_string(mod_dir.join("manifest.json"))
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or(serde_json::json!({}));
+
+        let enabled = !folder_name.to_lowercase().starts_with("_disabled_");
+        let display_title = manifest["title"].as_str()
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .unwrap_or_else(|| folder_name.clone());
+
+        let size = dir_size_bytes(&mod_dir);
+
+        mods.push(serde_json::json!({
+            "folder":      folder_name,
+            "path":        mod_dir.to_string_lossy(),
+            "title":       display_title,
+            "creator":     manifest["creator"].as_str().unwrap_or(""),
+            "version":     manifest["package_version"].as_str().unwrap_or(""),
+            "contentType": manifest["content_type"].as_str().unwrap_or(""),
+            "enabled":     enabled,
+            "size":        size,
+        }));
+    }
+    // Sort: enabled first, then by title
+    mods.sort_by(|a, b| {
+        let ae = a["enabled"].as_bool().unwrap_or(true);
+        let be = b["enabled"].as_bool().unwrap_or(true);
+        be.cmp(&ae).then_with(|| {
+            a["title"].as_str().unwrap_or("").to_lowercase()
+                .cmp(&b["title"].as_str().unwrap_or("").to_lowercase())
+        })
+    });
+    serde_json::json!(mods)
+}
+
+#[tauri::command]
+fn mod_toggle(path: String, enabled: bool) -> Result<serde_json::Value, String> {
+    let p = PathBuf::from(&path);
+    let folder_name = p.file_name()
+        .ok_or_else(|| "Érvénytelen elérési út".to_string())?
+        .to_string_lossy()
+        .to_string();
+    let parent = p.parent().ok_or_else(|| "Nincs szülőmappa".to_string())?;
+
+    let new_name = if enabled {
+        // Enable: remove _DISABLED_ prefix
+        let lower = folder_name.to_lowercase();
+        if lower.starts_with("_disabled_") {
+            folder_name[10..].to_string()
+        } else {
+            return Ok(serde_json::json!({ "ok": true }));
+        }
+    } else {
+        // Disable: add prefix (only if not already disabled)
+        let lower = folder_name.to_lowercase();
+        if lower.starts_with("_disabled_") {
+            return Ok(serde_json::json!({ "ok": true }));
+        }
+        format!("_DISABLED_{}", folder_name)
+    };
+
+    let new_path = parent.join(&new_name);
+    fs::rename(&p, &new_path).map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "ok": true }))
+}
+
+#[tauri::command]
+fn mod_delete(path: String) -> Result<serde_json::Value, String> {
+    let p = PathBuf::from(&path);
+    if !p.exists() { return Err("A mappa nem létezik".to_string()); }
+    fs::remove_dir_all(&p).map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "ok": true }))
+}
+
+// ── Bridge commands ───────────────────────────────────────────────
+
+fn bridge_dir() -> PathBuf {
+    dirs::home_dir().unwrap_or_default().join("skybound").join("bridge")
+}
+
+#[tauri::command]
+async fn bridge_start(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, String> {
+    // release lock before any .await
+    let (old_bridge, old_proxy) = {
+        let mut bp = state.bridge.lock().unwrap();
+        (bp.bridge.take(), bp.proxy.take())
+    };
+    if let Some(mut c) = old_bridge { let _ = c.kill().await; }
+    if let Some(mut c) = old_proxy  { let _ = c.kill().await; }
+
+    let dir = bridge_dir();
+
+    let bridge = TokioCommand::new("node")
+        .arg("src/index.js")
+        .current_dir(&dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    let proxy = TokioCommand::new("node")
+        .arg("proxy.js")
+        .current_dir(&dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    let mut bp = state.bridge.lock().unwrap();
+    bp.bridge = Some(bridge);
+    bp.proxy  = Some(proxy);
+
+    Ok(serde_json::json!({ "ok": true }))
+}
+
+#[tauri::command]
+async fn bridge_stop(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let (old_bridge, old_proxy) = {
+        let mut bp = state.bridge.lock().unwrap();
+        (bp.bridge.take(), bp.proxy.take())
+    };
+    if let Some(mut c) = old_bridge { let _ = c.kill().await; }
+    if let Some(mut c) = old_proxy  { let _ = c.kill().await; }
+    Ok(serde_json::json!({ "ok": true }))
+}
+
+#[tauri::command]
+fn bridge_status(state: tauri::State<'_, AppState>) -> serde_json::Value {
+    let bp = state.bridge.lock().unwrap();
+    serde_json::json!({ "running": bp.bridge.is_some() })
+}
+
 // ── App setup ─────────────────────────────────────────────────────
 
 pub fn run() {
     tauri::Builder::default()
+        .manage(AppState { bridge: Mutex::new(BridgeProc::new()) })
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
         .invoke_handler(tauri::generate_handler![
@@ -198,6 +435,13 @@ pub fn run() {
             save_version_settings,
             fetch_ofp,
             check_update,
+            bridge_start,
+            bridge_stop,
+            bridge_status,
+            mods_get_community_folder,
+            mods_list,
+            mod_toggle,
+            mod_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

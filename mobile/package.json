@@ -1,6 +1,6 @@
 {
-  "name": "xdeck-efb",
-  "version": "0.1.0",
+  "name": "skybound-efb",
+  "version": "5.0.0",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
