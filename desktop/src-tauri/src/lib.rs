@@ -380,6 +380,12 @@ async fn bridge_start(state: tauri::State<'_, AppState>) -> Result<serde_json::V
     if let Some(mut c) = old_proxy  { let _ = c.kill().await; }
 
     let dir = bridge_dir();
+    if !dir.exists() {
+        return Err(format!(
+            "Bridge mappa nem található: {}\nClónozd a SkyBound repo bridge mappáját ide.",
+            dir.display()
+        ));
+    }
 
     let bridge = TokioCommand::new("node")
         .arg("src/index.js")

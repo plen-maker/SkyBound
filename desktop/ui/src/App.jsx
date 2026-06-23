@@ -905,6 +905,7 @@ function GroundTab({ live, ofp }) {
   const planeRef       = React.useRef(null);
   const layerRefs      = React.useRef({});
   const chartLayersRef = React.useRef([]);
+  const chartCacheRef  = React.useRef({ lat: null, lon: null, ways: null, nodes: null });
   const [following,     setFollowing]     = React.useState(true);
   const [mapLayer,      setMapLayer]      = React.useState("hybrid");
   const [icaoInput,     setIcaoInput]     = React.useState("");
@@ -918,60 +919,93 @@ function GroundTab({ live, ofp }) {
     chartLayersRef.current = [];
   };
 
-  const loadAirportChart = React.useCallback(async (lat, lon) => {
+  const drawChartLayers = React.useCallback((ways, nodes) => {
     const map = leafRef.current;
     const L   = window.L;
     if (!map || !L) return;
     clearChartLayers();
+
+    // Draw order: apron/terminal → runway → taxilane → taxiway → badges last
+    const ORDER = { apron:0, terminal:0, gate:0, runway:1, taxilane:2, taxiway:3 };
+    const sorted = [...ways].sort((a,b) => (ORDER[a.tags?.aeroway]??4) - (ORDER[b.tags?.aeroway]??4));
+
+    const badges = [];
+    sorted.forEach(way => {
+      const coords = (way.nodes||[]).map(id=>nodes[id]).filter(Boolean);
+      if (coords.length < 2) return;
+      const type = way.tags?.aeroway;
+      const label = (way.tags?.ref || way.tags?.name || "").trim();
+      const closed = coords.length > 3
+        && coords[0][0]===coords[coords.length-1][0]
+        && coords[0][1]===coords[coords.length-1][1];
+
+      let layer;
+      if (type === "runway") {
+        layer = L.polyline(coords, { color:"#3a4858", weight:26, opacity:1, lineCap:"square" });
+      } else if (type === "apron" || type === "terminal" || type === "gate") {
+        layer = closed
+          ? L.polygon(coords, { color:"#2a3848", fillColor:"#2a3848", fillOpacity:0.9, weight:0 })
+          : L.polyline(coords, { color:"#2a3848", weight:10, opacity:0.8 });
+      } else if (type === "taxilane") {
+        layer = L.polyline(coords, { color:"#4a5e6e", weight:3, opacity:0.9, lineCap:"round" });
+      } else { // taxiway
+        layer = L.polyline(coords, { color:"#5a6e80", weight:7, opacity:1, lineCap:"round" });
+      }
+      layer.addTo(map);
+      chartLayersRef.current.push(layer);
+
+      if ((type==="taxiway"||type==="taxilane") && label) {
+        const mid = coords[Math.floor(coords.length/2)];
+        badges.push({ mid, label });
+      }
+    });
+
+    // Badges on top of everything
+    badges.forEach(({ mid, label }) => {
+      const w = Math.max(label.length * 7 + 10, 20);
+      const badge = L.marker(mid, {
+        icon: L.divIcon({
+          html: `<div style="background:#f5c518;color:#000;border-radius:3px;padding:2px 5px;font-size:11px;font-weight:900;font-family:'Consolas','Courier New',monospace;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.8);border:1.5px solid #c09000;letter-spacing:.5px;line-height:15px;">${label}</div>`,
+          iconSize: [w, 19],
+          iconAnchor: [w/2, 9],
+          className: "",
+        }),
+        zIndexOffset: 1000,
+      });
+      badge.addTo(map);
+      chartLayersRef.current.push(badge);
+    });
+  }, []);
+
+  const loadAirportChart = React.useCallback(async (lat, lon) => {
+    const map = leafRef.current;
+    const L   = window.L;
+    if (!map || !L) return;
+
+    // Return cache if same airport (within ~1.1 km)
+    const cache = chartCacheRef.current;
+    if (cache.ways && cache.lat !== null
+      && Math.abs(lat - cache.lat) < 0.01
+      && Math.abs(lon - cache.lon) < 0.01) {
+      drawChartLayers(cache.ways, cache.nodes);
+      return;
+    }
+
     setChartLoading(true);
-    const d = 0.045;
+    const d = 0.05;
     const bbox = `${lat-d},${lon-d},${lat+d},${lon+d}`;
-    const q = `[out:json][timeout:25];(way["aeroway"~"runway|taxiway|taxilane|apron|terminal|gate"](${bbox}););out body;>;out skel qt;`;
+    const q = `[out:json][timeout:30];(way["aeroway"~"runway|taxiway|taxilane|apron|terminal|gate"](${bbox}););out body;>;out skel qt;`;
     try {
       const r = await fetch("https://overpass-api.de/api/interpreter", { method:"POST", body:q });
       const data = await r.json();
       const nodes = {};
       data.elements.forEach(el => { if (el.type==="node") nodes[el.id]=[el.lat,el.lon]; });
       const ways = data.elements.filter(el => el.type==="way");
-
-      ways.forEach(way => {
-        const coords = (way.nodes||[]).map(id=>nodes[id]).filter(Boolean);
-        if (coords.length < 2) return;
-        const type = way.tags?.aeroway;
-        const ref  = (way.tags?.ref || way.tags?.name || "").trim();
-        const closed = coords.length > 3 && coords[0][0]===coords[coords.length-1][0];
-
-        let layer;
-        if (type === "runway") {
-          layer = L.polyline(coords, { color:"#4a5568", weight:24, opacity:1, lineCap:"square" });
-        } else if (type === "apron" || type === "terminal") {
-          layer = closed
-            ? L.polygon(coords, { color:"#2d3a4a", fillColor:"#2d3a4a", fillOpacity:0.85, weight:0 })
-            : L.polyline(coords, { color:"#2d3a4a", weight:8, opacity:0.7 });
-        } else { // taxiway / taxilane
-          layer = L.polyline(coords, { color:"#5a6a7a", weight: type==="taxilane"?3:6, opacity:0.9, lineCap:"round" });
-        }
-        layer.addTo(map);
-        chartLayersRef.current.push(layer);
-
-        // Yellow taxiway sign badge
-        if ((type==="taxiway"||type==="taxilane") && ref) {
-          const mid = coords[Math.floor(coords.length/2)];
-          const badge = L.marker(mid, {
-            icon: L.divIcon({
-              html: `<div style="background:#f5c518;color:#000;border-radius:3px;padding:1px 5px 2px;font-size:10px;font-weight:900;font-family:'SF Mono','Consolas',monospace;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.7);border:1.5px solid #b8960e;letter-spacing:.4px;line-height:14px;">${ref}</div>`,
-              iconAnchor: [Math.max(ref.length*3.8, 8), 8],
-              className: "",
-            }),
-            zIndexOffset: 600,
-          });
-          badge.addTo(map);
-          chartLayersRef.current.push(badge);
-        }
-      });
+      chartCacheRef.current = { lat, lon, ways, nodes };
+      drawChartLayers(ways, nodes);
     } catch(e) { console.warn("Airport chart:", e); }
     setChartLoading(false);
-  }, []);
+  }, [drawChartLayers]);
 
   const makePlaneIcon = (L, heading) => L.divIcon({
     html: `<div id="gnd-plane" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;transform:rotate(${heading}deg);transition:transform .25s linear;">
@@ -2883,15 +2917,6 @@ function ModsTab() {
     setLoading(false);
   }
 
-  async function toggleMod(mod) {
-    setBusy(b => ({...b, [mod.folder]: true}));
-    try {
-      await invoke("mod_toggle", { path: mod.path, enabled: !mod.enabled });
-      await loadMods(folder);
-    } catch(e) { setErr(String(e)); }
-    setBusy(b => ({...b, [mod.folder]: false}));
-  }
-
   async function deleteMod(mod) {
     setBusy(b => ({...b, [mod.folder]: true}));
     try {
@@ -2935,10 +2960,17 @@ function ModsTab() {
             MSFS 2020/2024 community mappa kezelő
           </div>
         </div>
-        <button className="btn-ghost" onClick={()=>loadMods(folder)} disabled={!folder||loading}>
-          <RefreshCw size={13} className={loading?"spin":""}/>
-          Frissítés
-        </button>
+        <div style={{ display:"flex", gap:6 }}>
+          {folder && (
+            <button className="btn-ghost" onClick={()=>py.openExternal(`file:///${folder.replace(/\\/g,"/")}`)}>
+              <FolderOpen size={13}/> Megnyitás
+            </button>
+          )}
+          <button className="btn-ghost" onClick={()=>loadMods(folder)} disabled={!folder||loading}>
+            <RefreshCw size={13} className={loading?"spin":""}/>
+            Frissítés
+          </button>
+        </div>
       </div>
 
       {/* Folder selector */}
@@ -3061,14 +3093,6 @@ function ModsTab() {
 
                 {/* Actions */}
                 <div style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
-                  {/* Enable/disable toggle */}
-                  <button className="btn-icon" onClick={()=>toggleMod(mod)} disabled={isBusy}
-                    title={mod.enabled ? "Letiltás" : "Engedélyezés"}
-                    style={{ color: mod.enabled ? "var(--gn)" : "var(--rd)" }}>
-                    {isBusy ? <Loader2 size={15} className="spin"/> :
-                      mod.enabled ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
-                  </button>
-
                   {/* Delete */}
                   {delConfirm === mod.folder ? (
                     <div style={{ display:"flex", gap:3 }}>
