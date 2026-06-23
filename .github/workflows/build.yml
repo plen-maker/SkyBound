@@ -65,7 +65,7 @@ jobs:
           FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           npm install --omit=optional
-          npx --yes @vercel/ncc build src/index.js -o ncc_out --quiet
+          npx --yes @vercel/ncc@0.38.3 build src/index.js -o ncc_out --quiet
           # Inject service account credentials so pkg bakes them into the exe
           [System.IO.File]::WriteAllText(
             (Join-Path (Get-Location) "ncc_out/serviceAccount.json"),
