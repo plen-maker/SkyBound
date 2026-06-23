@@ -1,9 +1,10 @@
-use tauri::Manager;
+use tauri::{Manager, Emitter};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tokio::process::{Child, Command as TokioCommand};
+use tokio::io::{AsyncBufReadExt, BufReader};
 
 struct BridgeProc {
     bridge: Option<Child>,
@@ -382,6 +383,95 @@ fn bridge_dir() -> PathBuf {
     dirs::home_dir().unwrap_or_default().join("skybound").join("bridge")
 }
 
+fn skybound_root() -> PathBuf {
+    dirs::home_dir().unwrap_or_default().join("skybound")
+}
+
+async fn run_streamed(
+    app: &tauri::AppHandle,
+    program: &str,
+    args: &[&str],
+    cwd: &PathBuf,
+) -> Result<(), String> {
+    let mut child = TokioCommand::new(program)
+        .args(args)
+        .current_dir(cwd)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("{program}: {e}"))?;
+
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let app1 = app.clone();
+    let app2 = app.clone();
+
+    let h1 = tokio::spawn(async move {
+        let mut lines = BufReader::new(stdout).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            app1.emit("bridge:log", line).ok();
+        }
+    });
+    let h2 = tokio::spawn(async move {
+        let mut lines = BufReader::new(stderr).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            app2.emit("bridge:log", line).ok();
+        }
+    });
+
+    let status = child.wait().await.map_err(|e| e.to_string())?;
+    let _ = tokio::join!(h1, h2);
+    if status.success() { Ok(()) } else { Err(format!("{program} exit {}", status.code().unwrap_or(-1))) }
+}
+
+#[tauri::command]
+async fn bridge_install(app: tauri::AppHandle, session_code: String) -> Result<(), String> {
+    let root = skybound_root();
+    let bridge = bridge_dir();
+
+    let emit = |msg: &str| { app.emit("bridge:log", msg.to_string()).ok(); };
+
+    // Clone or update repo
+    if root.join(".git").exists() {
+        emit("► git pull…");
+        run_streamed(&app, "git", &["pull", "--ff-only"], &root).await
+            .unwrap_or_else(|e| emit(&format!("git pull skip: {e}")));
+    } else {
+        emit("► git clone…");
+        let parent = root.parent().unwrap_or(std::path::Path::new("."));
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        run_streamed(&app, "git", &[
+            "clone", "https://github.com/plen-maker/SkyBound.git", "skybound"
+        ], &parent.to_path_buf()).await?;
+    }
+
+    // npm install
+    emit("► npm install…");
+    #[cfg(windows)]
+    let npm = "npm.cmd";
+    #[cfg(not(windows))]
+    let npm = "npm";
+    run_streamed(&app, npm, &["install", "--omit=dev"], &bridge).await?;
+
+    // Write .env
+    emit("► .env írása…");
+    let env_example = bridge.join(".env.example");
+    let env_path    = bridge.join(".env");
+    let template = fs::read_to_string(&env_example)
+        .unwrap_or_else(|_| "SKYBOUND_SESSION=\nSIMBRIEF_USERNAME=\n".to_string());
+    let content = if !session_code.is_empty() {
+        template.lines().map(|l| {
+            if l.starts_with("SKYBOUND_SESSION=") {
+                format!("SKYBOUND_SESSION={session_code}")
+            } else { l.to_string() }
+        }).collect::<Vec<_>>().join("\n") + "\n"
+    } else { template };
+    fs::write(&env_path, content).map_err(|e| e.to_string())?;
+
+    emit("✓ Kész! Bridge telepítve.");
+    Ok(())
+}
+
 #[tauri::command]
 async fn bridge_start(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, String> {
     // release lock before any .await
@@ -454,6 +544,7 @@ pub fn run() {
             save_version_settings,
             fetch_ofp,
             check_update,
+            bridge_install,
             bridge_start,
             bridge_stop,
             bridge_status,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { initializeApp, getApps } from "firebase/app";
 import {
   getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
@@ -2460,12 +2461,14 @@ const SettingsTab = React.memo(function SettingsTab({settings, save, onLoadOFP})
 });
 
 /* ══ BRIDGE TAB ══════════════════════════════════════════════════ */
-const BRIDGE_RELEASES = "https://github.com/plen-maker/SkyBound/releases/latest";
-
 function BridgeTab({ live, sessionCode }) {
-  const [running, setRunning] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr]         = useState("");
+  const [running,     setRunning]     = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [err,         setErr]         = useState("");
+  const [installing,  setInstalling]  = useState(false);
+  const [installDone, setInstallDone] = useState(false);
+  const [log,         setLog]         = useState([]);
+  const logRef = useRef(null);
   const notInstalled = err.includes("nem található") || err.includes("not found");
   const connected = live != null;
 
@@ -2476,6 +2479,26 @@ function BridgeTab({ live, sessionCode }) {
     }, 3000);
     return () => clearInterval(t);
   }, []);
+
+  // Auto-scroll log
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [log]);
+
+  async function startInstall() {
+    setInstalling(true); setInstallDone(false); setLog([]); setErr("");
+    const unlisten = await listen("bridge:log", e => {
+      setLog(prev => [...prev, e.payload]);
+    });
+    try {
+      await invoke("bridge_install", { sessionCode: sessionCode || "" });
+      setInstallDone(true);
+    } catch(e) {
+      setLog(prev => [...prev, `❌ Hiba: ${e}`]);
+    }
+    unlisten();
+    setInstalling(false);
+  }
 
   async function toggle() {
     setLoading(true); setErr("");
@@ -2491,6 +2514,48 @@ function BridgeTab({ live, sessionCode }) {
     setLoading(false);
   }
 
+  // Install progress UI
+  if (installing || (log.length > 0 && !running)) {
+    const done = installDone;
+    const pct  = done ? 100
+      : log.some(l => l.includes("npm install")) ? 66
+      : log.some(l => l.includes("git")) ? 33 : 10;
+    return (
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        <div className="card anim-up" style={{ padding:"20px" }}>
+          <div style={{ fontSize:14, fontWeight:700, color: done ? "var(--gn)" : "var(--cy)",
+            marginBottom:12, display:"flex", alignItems:"center", gap:8 }}>
+            {done ? <Check size={16}/> : <Loader2 size={16} className="spin"/>}
+            {done ? "Bridge telepítve!" : "Telepítés folyamatban…"}
+          </div>
+          {/* Progress bar */}
+          <div style={{ height:4, borderRadius:2, background:"var(--line)", marginBottom:14, overflow:"hidden" }}>
+            <div style={{ height:"100%", borderRadius:2, width:`${pct}%`,
+              background: done ? "var(--gn)" : "var(--cy)",
+              transition:"width .4s ease" }}/>
+          </div>
+          {/* Log */}
+          <div ref={logRef} style={{ background:"rgba(0,0,0,.3)", borderRadius:8, padding:"8px 10px",
+            fontFamily:"monospace", fontSize:10, color:"var(--dim)", lineHeight:1.7,
+            maxHeight:220, overflowY:"auto" }}>
+            {log.map((l,i) => (
+              <div key={i} style={{ color: l.startsWith("✓") ? "var(--gn)" : l.startsWith("❌") ? "var(--rd)" : l.startsWith("►") ? "var(--cy)" : "var(--dim)" }}>
+                {l}
+              </div>
+            ))}
+            {installing && <div style={{ color:"var(--cy)", animation:"pulse 1s infinite" }}>▌</div>}
+          </div>
+          {done && (
+            <button className="btn-primary" onClick={() => { setLog([]); setErr(""); }}
+              style={{ marginTop:12, width:"100%" }}>
+              ▶ Bridge indítása
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
 
@@ -2498,31 +2563,20 @@ function BridgeTab({ live, sessionCode }) {
       {notInstalled && (
         <div className="card anim-up" style={{ padding:"22px 20px",
           border:"1px solid rgba(255,180,84,.25)", background:"rgba(255,180,84,.04)" }}>
-          <div style={{ fontSize:15, fontWeight:700, color:"var(--am)", marginBottom:8 }}>
+          <div style={{ fontSize:15, fontWeight:700, color:"var(--am)", marginBottom:6 }}>
             Bridge nincs telepítve
           </div>
-          <div style={{ fontSize:12, color:"var(--dim)", lineHeight:1.7, marginBottom:14 }}>
-            A bridge egy külön futtatható, ami az MSFS SimConnect API-hoz kapcsolódik
-            és Firebase-en keresztül küldi az élő adatokat.<br/>
-            <b style={{ color:"var(--tx)" }}>Szükséges:</b> Node.js 18+ + a bridge forrás a{" "}
-            <code style={{ color:"var(--cy)" }}>%USERPROFILE%\skybound\bridge</code> mappában.
+          <div style={{ fontSize:12, color:"var(--dim)", lineHeight:1.7, marginBottom:16 }}>
+            Az app automatikusan letölti és beállítja a bridge-et.<br/>
+            <b style={{ color:"var(--tx)" }}>Szükséges:</b> git + Node.js 18+
           </div>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            <button className="btn-primary" onClick={() => py.openExternal(BRIDGE_RELEASES)}
-              style={{ fontSize:12 }}>
-              <ExternalLink size={12}/> Releases oldal
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-primary" onClick={startInstall} style={{ flex:1 }}>
+              <Server size={14}/> Telepítés
             </button>
-            <button className="btn-ghost" onClick={() => py.openExternal("https://nodejs.org/en/download")}
-              style={{ fontSize:12 }}>
-              Node.js letöltése
+            <button className="btn-ghost" onClick={() => py.openExternal("https://nodejs.org/en/download")}>
+              Node.js
             </button>
-          </div>
-          <div style={{ marginTop:12, fontSize:10, color:"var(--dim)", fontFamily:"monospace",
-            background:"rgba(0,0,0,.2)", borderRadius:6, padding:"6px 10px", lineHeight:1.8 }}>
-            git clone https://github.com/plen-maker/SkyBound %USERPROFILE%\skybound<br/>
-            cd %USERPROFILE%\skybound\bridge<br/>
-            npm install<br/>
-            copy .env.example .env &nbsp;# add SKYBOUND_SESSION=...
           </div>
         </div>
       )}

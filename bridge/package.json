@@ -8,17 +8,22 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "start:fsuipc": "node src/index.js --fsuipc",
-    "start:simconnect": "node src/index.js --simconnect"
+    "start:simconnect": "node src/index.js --simconnect",
+    "start:mock": "node src/index.js --mock",
+    "proxy": "node proxy.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
-    "firebase-admin": "^12.7.0",
+    "firebase-admin": "^14.0.0",
+    "http-proxy": "^1.18.1",
     "node-simconnect": "^3.2.0"
   },
   "optionalDependencies": {
-    "fsuipc": "^0.7.3"
+    "fsuipc": "^0.7.2"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "pkg": {
     "assets": [
       "node_modules/node-simconnect/prebuilds/**/*",
