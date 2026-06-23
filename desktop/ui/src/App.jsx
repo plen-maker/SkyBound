@@ -3112,7 +3112,6 @@ function ModsTab() {
                         {MOD_TYPE_LABELS[mod.contentType?.toUpperCase()] || mod.contentType}
                       </span>
                     )}
-                    {mod.size > 0 && <span style={{ fontSize:10, color:"var(--dim)" }}>{fmtSize(mod.size)}</span>}
                   </div>
                   <div style={{ fontSize:9, color:"var(--p3)", marginTop:1, fontFamily:"monospace",
                     whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>

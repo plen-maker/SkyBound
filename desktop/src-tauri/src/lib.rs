@@ -290,21 +290,6 @@ fn mods_get_community_folder() -> serde_json::Value {
     serde_json::json!({ "path": null })
 }
 
-fn dir_size_bytes(path: &PathBuf) -> u64 {
-    let mut total = 0u64;
-    if let Ok(entries) = fs::read_dir(path) {
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p.is_dir() {
-                total += dir_size_bytes(&p);
-            } else if let Ok(meta) = entry.metadata() {
-                total += meta.len();
-            }
-        }
-    }
-    total
-}
-
 #[tauri::command]
 fn mods_list(path: String) -> serde_json::Value {
     let dir = PathBuf::from(&path);
@@ -317,7 +302,6 @@ fn mods_list(path: String) -> serde_json::Value {
         let mod_dir = entry.path();
         if !mod_dir.is_dir() { continue; }
         let folder_name = mod_dir.file_name().unwrap_or_default().to_string_lossy().to_string();
-        // Skip hidden/system dirs
         if folder_name.starts_with('.') { continue; }
 
         let manifest: serde_json::Value = fs::read_to_string(mod_dir.join("manifest.json"))
@@ -331,8 +315,6 @@ fn mods_list(path: String) -> serde_json::Value {
             .map(String::from)
             .unwrap_or_else(|| folder_name.clone());
 
-        let size = dir_size_bytes(&mod_dir);
-
         mods.push(serde_json::json!({
             "folder":      folder_name,
             "path":        mod_dir.to_string_lossy(),
@@ -341,7 +323,6 @@ fn mods_list(path: String) -> serde_json::Value {
             "version":     manifest["package_version"].as_str().unwrap_or(""),
             "contentType": manifest["content_type"].as_str().unwrap_or(""),
             "enabled":     enabled,
-            "size":        size,
         }));
     }
     // Sort: enabled first, then by title
