@@ -425,6 +425,9 @@ async fn run_streamed(
 
 #[tauri::command]
 async fn bridge_install(app: tauri::AppHandle, session_code: String) -> Result<(), String> {
+    if session_code.trim().is_empty() {
+        return Err("Állítsd be a session kódot a Settings-ben, majd próbáld újra.".to_string());
+    }
     let root = skybound_root();
     let bridge = bridge_dir();
 
@@ -521,6 +524,20 @@ async fn bridge_start(app: tauri::AppHandle, state: tauri::State<'_, AppState>) 
     let dir = bridge_dir();
     if !dir.exists() {
         return Err("nem található".to_string());
+    }
+
+    // Check .env has SKYBOUND_SESSION
+    let env_path = dir.join(".env");
+    if !env_path.exists() {
+        return Err("Hiányzik a .env fájl — futtasd az auto-telepítést újra.".to_string());
+    }
+    let env_content = fs::read_to_string(&env_path).unwrap_or_default();
+    let has_session = env_content.lines().any(|l| {
+        let l = l.trim();
+        l.starts_with("SKYBOUND_SESSION=") && l.len() > "SKYBOUND_SESSION=".len()
+    });
+    if !has_session {
+        return Err("SKYBOUND_SESSION nincs beállítva a .env-ben.\nÁllítsd be a Settings > Session kód mezőben, majd indítsd újra a telepítést.".to_string());
     }
 
     let node = find_node();
