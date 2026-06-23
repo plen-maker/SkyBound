@@ -187,10 +187,19 @@ async fn check_update() -> serde_json::Value {
                     .unwrap_or(serde_json::json!({}));
                 let current = ver["codename"].as_str().unwrap_or("sequoia").to_lowercase();
                 if !latest.is_empty() && latest != current {
+                    // Find the MSI asset download URL
+                    let msi_url = rel["assets"]
+                        .as_array()
+                        .and_then(|arr| arr.iter().find(|a| {
+                            a["name"].as_str().map(|n| n.ends_with(".msi")).unwrap_or(false)
+                        }))
+                        .and_then(|a| a["browser_download_url"].as_str())
+                        .map(String::from);
                     serde_json::json!({
                         "update": true,
                         "codename": rel["tag_name"],
                         "url": rel["html_url"],
+                        "downloadUrl": msi_url,
                     })
                 } else {
                     serde_json::json!({ "update": false })
@@ -221,13 +230,19 @@ fn parse_installed_packages_path(opt_path: &PathBuf) -> Option<PathBuf> {
 
 #[tauri::command]
 fn mods_get_community_folder() -> serde_json::Value {
-    let local = dirs::data_local_dir().unwrap_or_default();
+    let local  = dirs::data_local_dir().unwrap_or_default();
     let config = dirs::config_dir().unwrap_or_default();
+    let home   = dirs::home_dir().unwrap_or_default();
 
+    // All known UserCfg.opt locations (MS Store + Steam + 2024)
     let cfg_opts = [
+        // MSFS 2020 MS Store
         local.join("Packages/Microsoft.FlightSimulator_8wekyb3d8bbwe/LocalCache/UserCfg.opt"),
+        // MSFS 2020 Steam
         config.join("Microsoft Flight Simulator/UserCfg.opt"),
+        // MSFS 2024 MS Store
         local.join("Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/UserCfg.opt"),
+        // MSFS 2024 Steam
         config.join("Microsoft Flight Simulator 2024/UserCfg.opt"),
     ];
 
@@ -238,15 +253,32 @@ fn mods_get_community_folder() -> serde_json::Value {
                 if community.exists() {
                     return serde_json::json!({ "path": community.to_string_lossy() });
                 }
+                // Sometimes InstalledPackagesPath already points to Community
+                if packages.ends_with("Community") && packages.exists() {
+                    return serde_json::json!({ "path": packages.to_string_lossy() });
+                }
             }
         }
     }
 
+    // Fallback: common default install locations
     let defaults = [
+        // MS Store defaults
         local.join("Packages/Microsoft.FlightSimulator_8wekyb3d8bbwe/LocalCache/Packages/Community"),
+        // Steam defaults
         config.join("Microsoft Flight Simulator/Packages/Community"),
+        // MSFS 2024 MS Store
         local.join("Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/Packages/Community"),
+        // MSFS 2024 Steam
         config.join("Microsoft Flight Simulator 2024/Packages/Community"),
+        // OneStore / Xbox App path
+        local.join("../LocalState/Packages/Microsoft.FlightSimulator_8wekyb3d8bbwe/Community"),
+        // Common manual install on C drive
+        PathBuf::from("C:/MSFS Community"),
+        PathBuf::from("C:/MSFS2024 Community"),
+        // OneDrive Documents path (common on new Windows installs)
+        home.join("OneDrive/Documents/OneStore/Community"),
+        home.join("OneDrive/Documents/Asobo Studio/Microsoft Flight Simulator/Community"),
     ];
 
     for p in &defaults {

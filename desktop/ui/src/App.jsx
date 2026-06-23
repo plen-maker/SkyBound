@@ -1020,11 +1020,6 @@ function GroundTab({ live, ofp }) {
   });
 
   React.useEffect(() => {
-    if (!document.getElementById("lf-css")) {
-      const l = document.createElement("link"); l.id = "lf-css";
-      l.rel = "stylesheet"; l.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(l);
-    }
     const init = () => {
       if (!mapRef.current || leafRef.current) return;
       const L = window.L;
@@ -1068,12 +1063,8 @@ function GroundTab({ live, ofp }) {
       map.on("mousedown touchstart", () => setFollowing(false));
     };
 
-    if (window.L) init();
-    else {
-      const s = document.createElement("script");
-      s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      s.onload = init; document.head.appendChild(s);
-    }
+    if (window.L) { init(); }
+    else { window.addEventListener("load", init, { once: true }); }
     return () => { if (leafRef.current) { leafRef.current.remove(); leafRef.current = null; planeRef.current = null; } };
   }, []);
 
@@ -2469,10 +2460,13 @@ const SettingsTab = React.memo(function SettingsTab({settings, save, onLoadOFP})
 });
 
 /* ══ BRIDGE TAB ══════════════════════════════════════════════════ */
+const BRIDGE_RELEASES = "https://github.com/plen-maker/SkyBound/releases/latest";
+
 function BridgeTab({ live, sessionCode }) {
   const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr]         = useState("");
+  const notInstalled = err.includes("nem található") || err.includes("not found");
   const connected = live != null;
 
   useEffect(() => {
@@ -2500,7 +2494,41 @@ function BridgeTab({ live, sessionCode }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
 
+      {/* Not installed state */}
+      {notInstalled && (
+        <div className="card anim-up" style={{ padding:"22px 20px",
+          border:"1px solid rgba(255,180,84,.25)", background:"rgba(255,180,84,.04)" }}>
+          <div style={{ fontSize:15, fontWeight:700, color:"var(--am)", marginBottom:8 }}>
+            Bridge nincs telepítve
+          </div>
+          <div style={{ fontSize:12, color:"var(--dim)", lineHeight:1.7, marginBottom:14 }}>
+            A bridge egy külön futtatható, ami az MSFS SimConnect API-hoz kapcsolódik
+            és Firebase-en keresztül küldi az élő adatokat.<br/>
+            <b style={{ color:"var(--tx)" }}>Szükséges:</b> Node.js 18+ + a bridge forrás a{" "}
+            <code style={{ color:"var(--cy)" }}>%USERPROFILE%\skybound\bridge</code> mappában.
+          </div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <button className="btn-primary" onClick={() => py.openExternal(BRIDGE_RELEASES)}
+              style={{ fontSize:12 }}>
+              <ExternalLink size={12}/> Releases oldal
+            </button>
+            <button className="btn-ghost" onClick={() => py.openExternal("https://nodejs.org/en/download")}
+              style={{ fontSize:12 }}>
+              Node.js letöltése
+            </button>
+          </div>
+          <div style={{ marginTop:12, fontSize:10, color:"var(--dim)", fontFamily:"monospace",
+            background:"rgba(0,0,0,.2)", borderRadius:6, padding:"6px 10px", lineHeight:1.8 }}>
+            git clone https://github.com/plen-maker/SkyBound %USERPROFILE%\skybound<br/>
+            cd %USERPROFILE%\skybound\bridge<br/>
+            npm install<br/>
+            copy .env.example .env &nbsp;# add SKYBOUND_SESSION=...
+          </div>
+        </div>
+      )}
+
       {/* Start / Stop kártya */}
+      {!notInstalled && (
       <div className="card anim-up" style={{ padding:"24px 20px", textAlign:"center" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10, marginBottom:18 }}>
           <div style={{
@@ -2533,6 +2561,7 @@ function BridgeTab({ live, sessionCode }) {
           Session: <span style={{ color:"var(--cy)", fontFamily:"monospace" }}>{sessionCode || "—"}</span>
         </div>
       </div>
+      )}
 
       {/* Live adatok ha csatlakozva */}
       {connected && (
