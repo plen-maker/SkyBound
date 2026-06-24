@@ -2515,7 +2515,8 @@ function BridgeTab({ live, sessionCode }) {
         await invoke("bridge_stop");
         setRunning(false);
       } else {
-        await invoke("bridge_start");
+        const refreshToken = auth.currentUser?.refreshToken || "";
+        await invoke("bridge_start", { refreshToken });
         setRunning(true);
       }
     } catch(e) { setErr(String(e)); }
@@ -2529,7 +2530,8 @@ function BridgeTab({ live, sessionCode }) {
         await invoke("bridge_stop");
         await new Promise(r => setTimeout(r, 600));
       }
-      await invoke("bridge_start");
+      const refreshToken = auth.currentUser?.refreshToken || "";
+      await invoke("bridge_start", { refreshToken });
       setRunning(true);
     } catch(e) { setErr(String(e)); }
     setLoading(false);

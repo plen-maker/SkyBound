@@ -580,7 +580,7 @@ fn no_window_cmd(program: &str) -> TokioCommand {
 }
 
 #[tauri::command]
-async fn bridge_start(app: tauri::AppHandle, state: tauri::State<'_, AppState>) -> Result<serde_json::Value, String> {
+async fn bridge_start(app: tauri::AppHandle, state: tauri::State<'_, AppState>, refresh_token: Option<String>) -> Result<serde_json::Value, String> {
     let old = { let mut bp = state.bridge.lock().unwrap(); bp.bridge.take() };
     if let Some(mut c) = old { let _ = c.kill().await; }
 
@@ -594,13 +594,28 @@ async fn bridge_start(app: tauri::AppHandle, state: tauri::State<'_, AppState>) 
     if !env_path.exists() {
         return Err("Hiányzik a .env fájl — futtasd az auto-telepítést újra.".to_string());
     }
-    let env_content = fs::read_to_string(&env_path).unwrap_or_default();
+    let mut env_content = fs::read_to_string(&env_path).unwrap_or_default();
     let has_session = env_content.lines().any(|l| {
         let l = l.trim();
         l.starts_with("SKYBOUND_SESSION=") && l.len() > "SKYBOUND_SESSION=".len()
     });
     if !has_session {
         return Err("SKYBOUND_SESSION nincs beállítva a .env-ben.\nÁllítsd be a Settings > Session kód mezőben, majd indítsd újra a telepítést.".to_string());
+    }
+
+    // Write Firebase refresh token to .env so bridge can auth without service account
+    if let Some(rt) = refresh_token.filter(|s| !s.is_empty()) {
+        if env_content.contains("FIREBASE_REFRESH_TOKEN=") {
+            let updated: Vec<String> = env_content.lines().map(|l| {
+                if l.starts_with("FIREBASE_REFRESH_TOKEN=") {
+                    format!("FIREBASE_REFRESH_TOKEN={rt}")
+                } else { l.to_string() }
+            }).collect();
+            env_content = updated.join("\n") + "\n";
+        } else {
+            env_content = format!("{}FIREBASE_REFRESH_TOKEN={rt}\n", env_content.trim_end_matches('\n').to_string() + "\n");
+        }
+        let _ = fs::write(&env_path, &env_content);
     }
 
     let node = find_node();
@@ -658,8 +673,12 @@ async fn bridge_stop(state: tauri::State<'_, AppState>) -> Result<serde_json::Va
 
 #[tauri::command]
 fn bridge_status(state: tauri::State<'_, AppState>) -> serde_json::Value {
-    let bp = state.bridge.lock().unwrap();
-    serde_json::json!({ "running": bp.bridge.is_some() })
+    let mut bp = state.bridge.lock().unwrap();
+    let running = bp.bridge.as_mut()
+        .map(|c| c.try_wait().ok().flatten().is_none())
+        .unwrap_or(false);
+    if !running { bp.bridge = None; }
+    serde_json::json!({ "running": running })
 }
 
 // ── App setup ─────────────────────────────────────────────────────

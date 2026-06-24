@@ -44,9 +44,12 @@ function findServiceAccount() {
 }
 
 const SVC = findServiceAccount();
-const OFFLINE = !SVC;
+const HAS_REFRESH = !!process.env.FIREBASE_REFRESH_TOKEN;
+const OFFLINE = !SVC && !HAS_REFRESH;
 if (OFFLINE) {
-  console.warn("[bridge] serviceAccount.json not found — offline mode (no Firebase sync, no push)");
+  console.warn("[bridge] OFFLINE — nincs service account és nincs FIREBASE_REFRESH_TOKEN a .env-ben");
+} else if (!SVC && HAS_REFRESH) {
+  console.log("[bridge] Firebase: REST API mód (refresh token)");
 }
 
 let ofp = null, triggers = [];
@@ -120,7 +123,7 @@ setInterval(async () => {
 
 async function main() {
   if (!OFFLINE) {
-    initFirebase(SVC);
+    initFirebase(SVC || null);
     watchTriggers(SESSION, t => { triggers = t; });
   }
   await loadOFP();
