@@ -2535,6 +2535,15 @@ function BridgeTab({ live, sessionCode }) {
     setLoading(false);
   }
 
+  async function redownload() {
+    setErr(""); setCrashLog("");
+    if (running) {
+      try { await invoke("bridge_stop"); setRunning(false); } catch {}
+      await new Promise(r => setTimeout(r, 800));
+    }
+    startInstall();
+  }
+
   // Install progress UI
   if (installing || (log.length > 0 && !running)) {
     const done = installDone;
@@ -2636,7 +2645,7 @@ function BridgeTab({ live, sessionCode }) {
             className="btn-ghost" style={{ fontSize:12, padding:"6px 14px" }}>
             <RotateCcw size={13}/> Újraindítás
           </button>
-          <button onClick={startInstall} disabled={loading || installing}
+          <button onClick={redownload} disabled={loading || installing}
             className="btn-ghost" style={{ fontSize:12, padding:"6px 14px" }}>
             <Download size={13}/> Újra letölt
           </button>
