@@ -104,6 +104,12 @@ function handleTelemetry(telemetry) {
     todDistNm: todDistanceNm(telemetry.altFt, 0),
     ofp: ofp && { dep:ofp.dep, arr:ofp.arr, pax:ofp.pax, payload:ofp.payload, blockFuel:ofp.blockFuel, units:ofp.units, route:ofp.route },
   };
+  // Push to local Tauri HTTP server (for mobile WebView, no auth needed)
+  fetch("http://127.0.0.1:47821/api/live", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...telemetry, ...derived, ts: Date.now() }),
+  }).catch(() => {});
+
   if (!OFFLINE) {
     writeLive(SESSION, telemetry, derived).catch(e => console.error("[fb] writeLive hiba:", e.message));
     const events = engine.evaluate(telemetry, triggers, ofp);

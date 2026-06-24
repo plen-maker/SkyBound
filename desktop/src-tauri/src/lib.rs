@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tokio::process::{Child, Command as TokioCommand};
 use tokio::io::{AsyncBufReadExt, BufReader};
-use axum::{Router, routing::get, response::{Html, IntoResponse}, http::StatusCode};
+use axum::{Router, routing::{get, post}, response::{Html, IntoResponse}, http::{StatusCode, HeaderValue, Method}, extract::State as AxumState};
+use std::sync::Arc;
 
 struct BridgeProc {
     bridge: Option<Child>,
@@ -15,7 +16,8 @@ impl BridgeProc {
 }
 
 struct AppState {
-    bridge: Mutex<BridgeProc>,
+    bridge:    Mutex<BridgeProc>,
+    live_data: Mutex<Option<serde_json::Value>>,
 }
 
 fn settings_path() -> PathBuf {
@@ -731,6 +733,8 @@ fn bridge_status(state: tauri::State<'_, AppState>) -> serde_json::Value {
 
 const EFB_HTML: &str = include_str!("efb_mobile.html");
 
+type SharedLive = Arc<Mutex<Option<serde_json::Value>>>;
+
 async fn http_version() -> impl IntoResponse {
     (StatusCode::OK, axum::Json(serde_json::json!({ "ok": true, "app": "SkyBound EFB" })))
 }
@@ -739,16 +743,41 @@ async fn http_efb() -> Html<&'static str> {
     Html(EFB_HTML)
 }
 
+async fn http_live_get(AxumState(live): AxumState<SharedLive>) -> impl IntoResponse {
+    let data = live.lock().unwrap().clone();
+    let mut resp = axum::Json(data.unwrap_or(serde_json::Value::Null)).into_response();
+    resp.headers_mut().insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+    resp
+}
+
+async fn http_live_post(
+    AxumState(live): AxumState<SharedLive>,
+    axum::Json(body): axum::Json<serde_json::Value>,
+) -> impl IntoResponse {
+    *live.lock().unwrap() = Some(body);
+    StatusCode::NO_CONTENT
+}
+
+async fn http_cors_preflight() -> impl IntoResponse {
+    let mut resp = StatusCode::NO_CONTENT.into_response();
+    let h = resp.headers_mut();
+    h.insert("Access-Control-Allow-Origin",  HeaderValue::from_static("*"));
+    h.insert("Access-Control-Allow-Methods", HeaderValue::from_static("GET,POST,OPTIONS"));
+    h.insert("Access-Control-Allow-Headers", HeaderValue::from_static("content-type"));
+    resp
+}
+
 fn start_http_server() {
-    tokio::spawn(async {
+    let live: SharedLive = Arc::new(Mutex::new(None));
+    tokio::spawn(async move {
         let router = Router::new()
             .route("/api/version", get(http_version))
-            .route("/", get(http_efb))
-            .route("/*_", get(http_efb));
+            .route("/api/live",    get(http_live_get).post(http_live_post).options(http_cors_preflight))
+            .route("/",            get(http_efb))
+            .route("/*_",          get(http_efb))
+            .with_state(live);
         match tokio::net::TcpListener::bind("0.0.0.0:47821").await {
-            Ok(listener) => {
-                let _ = axum::serve(listener, router).await;
-            }
+            Ok(listener) => { let _ = axum::serve(listener, router).await; }
             Err(e) => eprintln!("[http] port 47821 foglalt: {e}"),
         }
     });
@@ -759,7 +788,7 @@ fn start_http_server() {
 pub fn run() {
     start_http_server();
     tauri::Builder::default()
-        .manage(AppState { bridge: Mutex::new(BridgeProc::new()) })
+        .manage(AppState { bridge: Mutex::new(BridgeProc::new()), live_data: Mutex::new(None) })
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
         .invoke_handler(tauri::generate_handler![
