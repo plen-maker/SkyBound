@@ -376,6 +376,69 @@ fn mod_delete(path: String) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({ "ok": true }))
 }
 
+fn copy_dir_recursive(src: &PathBuf, dest: &PathBuf) -> Result<(), String> {
+    fs::create_dir_all(dest).map_err(|e| e.to_string())?;
+    for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let sp = entry.path();
+        let dp = dest.join(entry.file_name());
+        if sp.is_dir() {
+            copy_dir_recursive(&sp, &dp)?;
+        } else {
+            fs::copy(&sp, &dp).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn mod_add(src_path: String, community_path: String) -> Result<serde_json::Value, String> {
+    let src = PathBuf::from(&src_path);
+    if !src.exists() || !src.is_dir() {
+        return Err("A forrás mappa nem létezik vagy érvénytelen.".to_string());
+    }
+    let folder_name = src.file_name()
+        .ok_or("Érvénytelen elérési út")?
+        .to_string_lossy()
+        .to_string();
+    let dest = PathBuf::from(&community_path).join(&folder_name);
+    if dest.exists() {
+        return Err(format!("Már létezik: {}", folder_name));
+    }
+    copy_dir_recursive(&src, &dest)?;
+    Ok(serde_json::json!({ "ok": true, "folder": folder_name }))
+}
+
+#[tauri::command]
+fn mod_merge(paths: Vec<String>, target_name: String, community_path: String) -> Result<serde_json::Value, String> {
+    if paths.len() < 2 {
+        return Err("Legalább 2 mod szükséges az összevonáshoz.".to_string());
+    }
+    if target_name.trim().is_empty() {
+        return Err("Adj meg egy célmappa nevet.".to_string());
+    }
+    let dest = PathBuf::from(&community_path).join(target_name.trim());
+    if dest.exists() {
+        return Err(format!("Már létezik: {}", target_name.trim()));
+    }
+    fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+    for src_path in &paths {
+        let src = PathBuf::from(src_path);
+        if !src.exists() { continue; }
+        for entry in fs::read_dir(&src).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let sp = entry.path();
+            let dp = dest.join(entry.file_name());
+            if sp.is_dir() {
+                copy_dir_recursive(&sp, &dp)?;
+            } else {
+                fs::copy(&sp, &dp).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    Ok(serde_json::json!({ "ok": true, "folder": target_name.trim() }))
+}
+
 // ── Bridge commands ───────────────────────────────────────────────
 
 fn bridge_dir() -> PathBuf {
@@ -622,6 +685,8 @@ pub fn run() {
             mods_list,
             mod_toggle,
             mod_delete,
+            mod_add,
+            mod_merge,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

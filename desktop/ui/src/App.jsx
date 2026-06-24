@@ -15,6 +15,7 @@ import {
   Check, LogOut, Radio, Eye, EyeOff, RefreshCw, Layers, StickyNote,
   BookOpen, Book, Activity, Server, TrendingDown, PackageOpen,
   Search, FolderOpen, X, ToggleLeft, ToggleRight, ChevronDown,
+  GitMerge, Download, RotateCcw,
 } from "lucide-react";
 
 /* ── PyWebView bridge ─────────────────────────────────────────── */
@@ -2521,6 +2522,19 @@ function BridgeTab({ live, sessionCode }) {
     setLoading(false);
   }
 
+  async function restart() {
+    setLoading(true); setErr(""); setCrashLog("");
+    try {
+      if (running) {
+        await invoke("bridge_stop");
+        await new Promise(r => setTimeout(r, 600));
+      }
+      await invoke("bridge_start");
+      setRunning(true);
+    } catch(e) { setErr(String(e)); }
+    setLoading(false);
+  }
+
   // Install progress UI
   if (installing || (log.length > 0 && !running)) {
     const done = installDone;
@@ -2615,6 +2629,18 @@ function BridgeTab({ live, sessionCode }) {
           }}>
           {loading ? "⏳" : running ? "⏹  Stop" : "▶  Start"}
         </button>
+
+        {/* Secondary actions */}
+        <div style={{ display:"flex", gap:8, marginTop:12, justifyContent:"center" }}>
+          <button onClick={restart} disabled={loading}
+            className="btn-ghost" style={{ fontSize:12, padding:"6px 14px" }}>
+            <RotateCcw size={13}/> Újraindítás
+          </button>
+          <button onClick={startInstall} disabled={loading || installing}
+            className="btn-ghost" style={{ fontSize:12, padding:"6px 14px" }}>
+            <Download size={13}/> Újra letölt
+          </button>
+        </div>
 
         {err && <div style={{ marginTop:10, fontSize:11, color:"var(--rd)", lineHeight:1.5 }}>{err}</div>}
 
@@ -3005,6 +3031,13 @@ function ModsTab() {
   const [filter, setFilter]     = useState("All");
   const [delConfirm, setDelConfirm] = useState(null);
   const [busy, setBusy]         = useState({});
+  const [selected, setSelected] = useState(new Set());
+  const [showAdd, setShowAdd]   = useState(false);
+  const [addPath, setAddPath]   = useState("");
+  const [adding, setAdding]     = useState(false);
+  const [showMerge, setShowMerge] = useState(false);
+  const [mergeName, setMergeName] = useState("");
+  const [merging, setMerging]   = useState(false);
 
   async function detect() {
     setLoading(true); setErr("");
@@ -3030,9 +3063,39 @@ function ModsTab() {
     try {
       await invoke("mod_delete", { path: mod.path });
       setMods(m => m.filter(x => x.folder !== mod.folder));
+      setSelected(prev => { const n = new Set(prev); n.delete(mod.folder); return n; });
     } catch(e) { setErr(String(e)); }
     setBusy(b => ({...b, [mod.folder]: false}));
     setDelConfirm(null);
+  }
+
+  const toggleSelect = folder => setSelected(prev => {
+    const n = new Set(prev);
+    n.has(folder) ? n.delete(folder) : n.add(folder);
+    return n;
+  });
+
+  async function addMod() {
+    if (!addPath.trim() || !folder) return;
+    setAdding(true); setErr("");
+    try {
+      await invoke("mod_add", { srcPath: addPath.trim(), communityPath: folder });
+      setAddPath(""); setShowAdd(false);
+      await loadMods(folder);
+    } catch(e) { setErr(String(e)); }
+    setAdding(false);
+  }
+
+  async function mergeMods() {
+    if (selected.size < 2 || !mergeName.trim() || !folder) return;
+    setMerging(true); setErr("");
+    const paths = (mods || []).filter(m => selected.has(m.folder)).map(m => m.path);
+    try {
+      await invoke("mod_merge", { paths, targetName: mergeName.trim(), communityPath: folder });
+      setSelected(new Set()); setMergeName(""); setShowMerge(false);
+      await loadMods(folder);
+    } catch(e) { setErr(String(e)); }
+    setMerging(false);
   }
 
   useEffect(() => { detect(); }, []);
@@ -3074,6 +3137,18 @@ function ModsTab() {
               <FolderOpen size={13}/> Megnyitás
             </button>
           )}
+          {selected.size >= 2 && (
+            <button className="btn-ghost" onClick={()=>{ setShowMerge(true); setShowAdd(false); }}
+              style={{ color:"var(--pu)", borderColor:"rgba(167,139,250,.3)" }}>
+              <GitMerge size={13}/> Összevon ({selected.size})
+            </button>
+          )}
+          {folder && (
+            <button className="btn-ghost" onClick={()=>{ setShowAdd(s=>!s); setShowMerge(false); }}
+              style={{ color:"var(--gn)" }}>
+              <Plus size={13}/> Hozzáadás
+            </button>
+          )}
           <button className="btn-ghost" onClick={()=>loadMods(folder)} disabled={!folder||loading}>
             <RefreshCw size={13} className={loading?"spin":""}/>
             Frissítés
@@ -3093,12 +3168,74 @@ function ModsTab() {
         </button>
       </div>
 
+      {/* Add panel */}
+      {showAdd && (
+        <div className="card anim-down" style={{ padding:"12px 14px", border:"1px solid rgba(82,227,176,.25)",
+          background:"rgba(82,227,176,.04)", flexShrink:0 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"var(--gn)", marginBottom:8 }}>
+            <Plus size={12}/> Mod hozzáadása
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <input className="inp" value={addPath} onChange={e=>setAddPath(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&addMod()}
+              placeholder="C:\letöltések\valami-mod-mappa"
+              style={{ flex:1, fontSize:11, padding:"6px 9px", fontFamily:"monospace" }}/>
+            <button className="btn-primary" onClick={addMod} disabled={adding||!addPath.trim()}
+              style={{ padding:"6px 16px", fontSize:12, flexShrink:0 }}>
+              {adding ? <Loader2 size={13} className="spin"/> : <Check size={13}/>} Másol
+            </button>
+            <button className="btn-icon" onClick={()=>{ setShowAdd(false); setAddPath(""); }}>
+              <X size={14}/>
+            </button>
+          </div>
+          <div style={{ fontSize:10, color:"var(--dim)", marginTop:6 }}>
+            A megadott mappa (neve szerint) bemásolódik a community mappába.
+          </div>
+        </div>
+      )}
+
+      {/* Merge panel */}
+      {showMerge && selected.size >= 2 && (
+        <div className="card anim-down" style={{ padding:"12px 14px", border:"1px solid rgba(167,139,250,.25)",
+          background:"rgba(167,139,250,.04)", flexShrink:0 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"var(--pu)", marginBottom:6 }}>
+            <GitMerge size={12}/> {selected.size} mod összevonása
+          </div>
+          <div style={{ fontSize:10, color:"var(--dim)", marginBottom:8 }}>
+            {(mods||[]).filter(m=>selected.has(m.folder)).map(m=>m.title).join(" + ")}
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <input className="inp" value={mergeName} onChange={e=>setMergeName(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&mergeMods()}
+              placeholder="összevont-mod-neve"
+              style={{ flex:1, fontSize:11, padding:"6px 9px", fontFamily:"monospace" }}/>
+            <button className="btn-primary" onClick={mergeMods} disabled={merging||!mergeName.trim()}
+              style={{ padding:"6px 16px", fontSize:12, flexShrink:0,
+                background:"rgba(167,139,250,.2)", borderColor:"rgba(167,139,250,.5)", color:"var(--pu)" }}>
+              {merging ? <Loader2 size={13} className="spin"/> : <GitMerge size={13}/>} Összevon
+            </button>
+            <button className="btn-icon" onClick={()=>{ setShowMerge(false); setMergeName(""); }}>
+              <X size={14}/>
+            </button>
+          </div>
+          <div style={{ fontSize:10, color:"var(--dim)", marginTop:6 }}>
+            Az eredeti modok megmaradnak — ellenőrzés után törölheted őket.
+          </div>
+        </div>
+      )}
+
       {/* Stats bar */}
       {mods !== null && (
         <div style={{ display:"flex", alignItems:"center", gap:16, fontSize:11, color:"var(--dim)", flexShrink:0 }}>
           <span><b style={{ color:"var(--tx)" }}>{mods.length}</b> total mod</span>
           <span><b style={{ color:"var(--gn)" }}>{enabledCount}</b> aktív</span>
           {disabledCount > 0 && <span><b style={{ color:"var(--rd)" }}>{disabledCount}</b> letiltva</span>}
+          {selected.size > 0 && (
+            <span style={{ cursor:"pointer" }} onClick={()=>setSelected(new Set())}>
+              <b style={{ color:"var(--pu)" }}>{selected.size}</b> kijelölve
+              <span style={{ color:"var(--dim)", marginLeft:4 }}>✕</span>
+            </span>
+          )}
           <div style={{ flex:1 }}/>
           {/* Filter chips */}
           <div style={{ display:"flex", gap:4 }}>
@@ -3164,12 +3301,17 @@ function ModsTab() {
             const color = modBrandColor(mod.folder);
             const TypeIcon = modTypeIcon(mod.contentType);
             const isBusy = busy[mod.folder];
+            const isSelected = selected.has(mod.folder);
             return (
               <div key={mod.folder} className="card"
                 style={{ padding:"10px 12px", display:"flex", alignItems:"center", gap:10,
                   opacity: mod.enabled ? 1 : 0.5,
-                  borderLeft: `3px solid ${mod.enabled ? color : "var(--line)"}`,
+                  borderLeft: `3px solid ${isSelected ? "var(--pu)" : mod.enabled ? color : "var(--line)"}`,
+                  background: isSelected ? "rgba(167,139,250,.06)" : undefined,
                 }}>
+                {/* Checkbox */}
+                <input type="checkbox" checked={isSelected} onChange={()=>toggleSelect(mod.folder)}
+                  style={{ accentColor:"var(--pu)", width:15, height:15, flexShrink:0, cursor:"pointer" }}/>
                 {/* Icon */}
                 <div style={{ width:32, height:32, borderRadius:8, flexShrink:0,
                   background: `${color}18`, display:"flex", alignItems:"center", justifyContent:"center" }}>
