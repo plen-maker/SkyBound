@@ -767,6 +767,22 @@ async fn http_cors_preflight() -> impl IntoResponse {
     resp
 }
 
+#[tauri::command]
+fn open_firewall() -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("powershell")
+            .args(["-WindowStyle", "Hidden", "-Command",
+                   "Start-Process netsh -ArgumentList 'advfirewall firewall add rule name=\"SkyBound EFB\" dir=in action=allow protocol=TCP localport=47821 enable=yes' -Verb RunAs -Wait"])
+            .creation_flags(0x0800_0000)
+            .spawn()
+            .is_ok()
+    }
+    #[cfg(not(windows))]
+    { true }
+}
+
 fn start_http_server() {
     let live: SharedLive = Arc::new(Mutex::new(None));
     tokio::spawn(async move {
@@ -803,6 +819,7 @@ pub fn run() {
             bridge_stop,
             bridge_status,
             bridge_read_log,
+            open_firewall,
             mods_get_community_folder,
             mods_list,
             mod_toggle,

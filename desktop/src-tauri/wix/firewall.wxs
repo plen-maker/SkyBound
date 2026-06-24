@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <CustomAction Id="AddFirewallRule"
+                  Directory="SystemFolder"
+                  ExeCommand="netsh advfirewall firewall add rule name=&quot;SkyBound EFB&quot; dir=in action=allow protocol=TCP localport=47821 enable=yes"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore"/>
+    <CustomAction Id="RemoveFirewallRule"
+                  Directory="SystemFolder"
+                  ExeCommand="netsh advfirewall firewall delete rule name=&quot;SkyBound EFB&quot;"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore"/>
+    <InstallExecuteSequence>
+      <Custom Action="AddFirewallRule" After="InstallFiles">NOT Installed OR REINSTALL</Custom>
+      <Custom Action="RemoveFirewallRule" Before="RemoveFiles">Installed AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
+  </Fragment>
+</Wix>

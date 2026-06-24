@@ -2672,6 +2672,11 @@ function BridgeTab({ live, sessionCode }) {
               color: showLog ? "var(--cy)" : undefined }}>
             Log
           </button>
+          <button onClick={() => invoke("open_firewall")}
+            className="btn-ghost" style={{ fontSize:12, padding:"6px 14px" }}
+            title="Tűzfalszabály hozzáadása — szükséges a mobil WebView csatlakozáshoz">
+            🔓 Tűzfal
+          </button>
         </div>
 
         {err && <div style={{ marginTop:10, fontSize:11, color:"var(--rd)", lineHeight:1.5 }}>{err}</div>}
