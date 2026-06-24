@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<title>SkyBound EFB</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#070b12;color:#e8edf5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column}
+  .hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(255,255,255,.04);border-bottom:1px solid rgba(255,255,255,.07)}
+  .hdr-title{font-size:13px;font-weight:700;letter-spacing:.5px;color:#4df0ff}
+  .dot{width:8px;height:8px;border-radius:50%;background:#f06080;display:inline-block;margin-right:6px;transition:background .4s}
+  .dot.live{background:#52e3b0;box-shadow:0 0 6px 2px rgba(82,227,176,.4)}
+  .dot.wait{background:#ffb454;animation:pulse 1.2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.07);flex:1}
+  .cell{background:#070b12;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 12px;gap:4px}
+  .cell.full{grid-column:1/-1}
+  .label{font-size:9px;letter-spacing:1.2px;color:#5a7090;font-weight:700;text-transform:uppercase}
+  .val{font-size:28px;font-weight:800;font-variant-numeric:tabular-nums}
+  .val.cy{color:#4df0ff}.val.am{color:#ffb454}.val.gn{color:#52e3b0}.val.rd{color:#f06080}.val.pu{color:#b088ff}
+  .sub{font-size:10px;color:#5a7090;margin-top:2px}
+  .aircraft{font-size:13px;font-weight:600;color:#8aa0bc;text-align:center;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.07)}
+  .setup{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;gap:16px}
+  .setup h2{font-size:18px;font-weight:800;color:#4df0ff}
+  .setup p{font-size:13px;color:#5a7090;text-align:center;line-height:1.6}
+  input{width:100%;background:#0d1520;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;color:#e8edf5;font-size:15px;font-family:monospace;outline:none}
+  input:focus{border-color:#4df0ff}
+  .btn{width:100%;background:rgba(77,240,255,.12);border:1px solid rgba(77,240,255,.3);border-radius:10px;padding:13px;color:#4df0ff;font-size:15px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .btn:active{background:rgba(77,240,255,.2)}
+  .waiting{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+  .waiting p{font-size:13px;color:#5a7090}
+  .spinner{width:32px;height:32px;border:3px solid rgba(77,240,255,.15);border-top-color:#4df0ff;border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .onground{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#ffb454;font-weight:700}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <span><span class="dot" id="dot"></span><span id="status">Csatlakozás…</span></span>
+  <span class="hdr-title">SkyBound EFB</span>
+  <span id="btn-change" style="font-size:11px;color:#5a7090;cursor:pointer;padding:4px 8px" onclick="changeSession()">Változtat</span>
+</div>
+
+<div id="setup" class="setup" style="display:none">
+  <h2>Session kód</h2>
+  <p>Írd be a bridge .env-ben lévő<br>SKYBOUND_SESSION értékét</p>
+  <input id="inp" type="text" placeholder="pl. kovacs-peter" autocapitalize="none" autocorrect="off" spellcheck="false"/>
+  <button class="btn" onclick="saveSession()">Csatlakozás</button>
+</div>
+
+<div id="waiting" class="waiting" style="display:none">
+  <div class="spinner"></div>
+  <p id="wait-msg">Sim adatok várása…</p>
+</div>
+
+<div id="live" style="display:none;flex-direction:column;flex:1">
+  <div class="aircraft" id="aircraft">—</div>
+  <div class="grid">
+    <div class="cell"><div class="label">ALT</div><div class="val cy" id="alt">—</div><div class="sub">ft</div></div>
+    <div class="cell"><div class="label">GS</div><div class="val am" id="gs">—</div><div class="sub">kt</div></div>
+    <div class="cell"><div class="label">VS</div><div class="val" id="vs">—</div><div class="sub">fpm</div></div>
+    <div class="cell"><div class="label">IAS</div><div class="val pu" id="ias">—</div><div class="sub">kt</div></div>
+    <div class="cell full" style="padding:14px"><div class="label" style="margin-bottom:6px">KOORDINÁTA</div><div style="font-size:13px;font-family:monospace;color:#8aa0bc" id="pos">—</div></div>
+    <div class="cell full" id="ground-cell" style="display:none"><div class="onground">⚫ Földön</div></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-database.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+
+const FB = {
+  apiKey:"AIzaSyAxHmLWOIJl4xC44uHsRbxqzRhF4mA0kqE",
+  authDomain:"simapp-99f40.firebaseapp.com",
+  databaseURL:"https://simapp-99f40-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:"simapp-99f40",
+  appId:"1:993511543138:web:ec3a0d3e19713160111c3b"
+};
+
+const app  = initializeApp(FB);
+const db   = getDatabase(app);
+const auth = getAuth(app);
+
+let unsubscribe = null;
+let session = localStorage.getItem("session") || "";
+
+const $ = id => document.getElementById(id);
+
+function showSetup(){ $("setup").style.display=""; $("waiting").style.display="none"; $("live").style.display="none"; $("inp").value=session; }
+function showWaiting(msg){ $("setup").style.display="none"; $("waiting").style.display=""; $("live").style.display="none"; $("wait-msg").textContent=msg||"Sim adatok várása…"; }
+function showLive(){ $("setup").style.display="none"; $("waiting").style.display="none"; $("live").style.display="flex"; }
+
+function setDot(state){ // live | wait | off
+  const d=$("dot"); const s=$("status");
+  d.className="dot";
+  if(state==="live"){ d.classList.add("live"); s.textContent="Csatlakozva"; }
+  else if(state==="wait"){ d.classList.add("wait"); s.textContent="Sim vár…"; }
+  else{ s.textContent="Offline"; }
+}
+
+function fmt(v,dec=0){ return v==null?"—":Number(v).toFixed(dec); }
+
+function subscribe(code){
+  if(unsubscribe) unsubscribe();
+  showWaiting("Csatlakozás Firebase-hez…");
+  setDot("wait");
+
+  let staleTimer;
+  const r = ref(db, `sessions/${code}/live`);
+  unsubscribe = onValue(r, snap => {
+    const d = snap.val();
+    clearTimeout(staleTimer);
+    if(!d || !d.ts || Date.now()-d.ts > 30000){
+      showWaiting("Sim adatok várása…"); setDot("wait"); return;
+    }
+    showLive(); setDot("live");
+    $("aircraft").textContent = d.aircraftTitle || "Repülő";
+    $("alt").textContent = Math.round(d.altFt||0).toLocaleString();
+    $("gs").textContent  = Math.round(d.gsKt||0);
+    const vs = Math.round(d.vsFpm||0);
+    const ve = $("vs");
+    ve.textContent = (vs>=0?"+":"")+vs;
+    ve.className   = "val "+(vs < -100 ? "rd" : "gn");
+    $("ias").textContent = Math.round(d.iasKt||0);
+    const lat = d.lat?.toFixed(4)??"-"; const lon = d.lon?.toFixed(4)??"-";
+    $("pos").textContent = `${lat}° N  ${lon}° E`;
+    $("ground-cell").style.display = d.onGround ? "" : "none";
+
+    staleTimer = setTimeout(()=>{ showWaiting("Sim adatok várása…"); setDot("wait"); }, 30000);
+  }, err => { showWaiting("Firebase hiba: "+err.message); setDot("off"); });
+}
+
+window.saveSession = function(){
+  const v = $("inp").value.trim();
+  if(!v) return;
+  session = v;
+  localStorage.setItem("session", v);
+  subscribe(v);
+};
+
+window.changeSession = function(){ showSetup(); };
+
+// Init
+signInAnonymously(auth).catch(()=>{});
+
+// Pre-fill from URL param ?session=xxx
+const sp = new URLSearchParams(location.search);
+const urlSession = sp.get("session");
+if(urlSession){ session = urlSession; localStorage.setItem("session", urlSession); }
+
+if(session){ subscribe(session); }
+else{ showSetup(); }
+</script>
+</body>
+</html>

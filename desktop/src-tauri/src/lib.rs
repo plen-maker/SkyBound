@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tokio::process::{Child, Command as TokioCommand};
 use tokio::io::{AsyncBufReadExt, BufReader};
+use axum::{Router, routing::get, response::{Html, IntoResponse}, http::StatusCode};
 
 struct BridgeProc {
     bridge: Option<Child>,
@@ -726,9 +727,37 @@ fn bridge_status(state: tauri::State<'_, AppState>) -> serde_json::Value {
     serde_json::json!({ "running": running })
 }
 
+// ── Local HTTP server (port 47821) for mobile WebView ────────────
+
+const EFB_HTML: &str = include_str!("efb_mobile.html");
+
+async fn http_version() -> impl IntoResponse {
+    (StatusCode::OK, axum::Json(serde_json::json!({ "ok": true, "app": "SkyBound EFB" })))
+}
+
+async fn http_efb() -> Html<&'static str> {
+    Html(EFB_HTML)
+}
+
+fn start_http_server() {
+    tokio::spawn(async {
+        let router = Router::new()
+            .route("/api/version", get(http_version))
+            .route("/", get(http_efb))
+            .route("/*_", get(http_efb));
+        match tokio::net::TcpListener::bind("0.0.0.0:47821").await {
+            Ok(listener) => {
+                let _ = axum::serve(listener, router).await;
+            }
+            Err(e) => eprintln!("[http] port 47821 foglalt: {e}"),
+        }
+    });
+}
+
 // ── App setup ─────────────────────────────────────────────────────
 
 pub fn run() {
+    start_http_server();
     tauri::Builder::default()
         .manage(AppState { bridge: Mutex::new(BridgeProc::new()) })
         .plugin(tauri_plugin_shell::init())
