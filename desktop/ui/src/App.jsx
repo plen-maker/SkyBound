@@ -2470,7 +2470,22 @@ function BridgeTab({ live, sessionCode }) {
   const [installing,  setInstalling]  = useState(false);
   const [installDone, setInstallDone] = useState(false);
   const [log,         setLog]         = useState([]);
-  const logRef = useRef(null);
+  const [showLog,     setShowLog]     = useState(false);
+  const [liveLog,     setLiveLog]     = useState("");
+  const logRef  = useRef(null);
+  const liveRef = useRef(null);
+
+  useEffect(() => {
+    if (!showLog) return;
+    const load = () => invoke("bridge_read_log").then(setLiveLog).catch(()=>{});
+    load();
+    const t = setInterval(load, 2000);
+    return () => clearInterval(t);
+  }, [showLog]);
+
+  useEffect(() => {
+    if (liveRef.current) liveRef.current.scrollTop = liveRef.current.scrollHeight;
+  }, [liveLog]);
   const notInstalled = err.includes("nem található") || err.includes("not found");
   const connected = live != null;
 
@@ -2651,6 +2666,11 @@ function BridgeTab({ live, sessionCode }) {
             className="btn-ghost" style={{ fontSize:12, padding:"6px 14px" }}>
             <Download size={13}/> Újra letölt
           </button>
+          <button onClick={() => setShowLog(v => !v)}
+            className="btn-ghost" style={{ fontSize:12, padding:"6px 14px",
+              color: showLog ? "var(--cy)" : undefined }}>
+            Log
+          </button>
         </div>
 
         {err && <div style={{ marginTop:10, fontSize:11, color:"var(--rd)", lineHeight:1.5 }}>{err}</div>}
@@ -2659,6 +2679,20 @@ function BridgeTab({ live, sessionCode }) {
           Session: <span style={{ color:"var(--cy)", fontFamily:"monospace" }}>{sessionCode || "—"}</span>
         </div>
       </div>
+      )}
+
+      {/* Live log */}
+      {showLog && (
+        <div className="card anim-up" style={{ padding:"10px 12px" }}>
+          <div style={{ fontSize:10, fontWeight:700, color:"var(--cy)", marginBottom:6, letterSpacing:1 }}>
+            BRIDGE.LOG (élő)
+          </div>
+          <div ref={liveRef} style={{ background:"rgba(0,0,0,.3)", borderRadius:6, padding:"6px 8px",
+            fontFamily:"monospace", fontSize:9.5, color:"var(--dim)", lineHeight:1.7,
+            maxHeight:200, overflowY:"auto", whiteSpace:"pre-wrap" }}>
+            {liveLog || "— nincs log adat —"}
+          </div>
+        </div>
       )}
 
       {/* Crash log */}

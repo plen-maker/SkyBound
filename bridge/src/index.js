@@ -105,10 +105,10 @@ function handleTelemetry(telemetry) {
     ofp: ofp && { dep:ofp.dep, arr:ofp.arr, pax:ofp.pax, payload:ofp.payload, blockFuel:ofp.blockFuel, units:ofp.units, route:ofp.route },
   };
   if (!OFFLINE) {
-    writeLive(SESSION, telemetry, derived).catch(() => {});
+    writeLive(SESSION, telemetry, derived).catch(e => console.error("[fb] writeLive hiba:", e.message));
     const events = engine.evaluate(telemetry, triggers, ofp);
     for (const ev of events)
-      pushToDevices(SESSION, { title: ev.title, body: ev.body }).catch(() => {});
+      pushToDevices(SESSION, { title: ev.title, body: ev.body }).catch(e => console.warn("[fb] push hiba:", e.message));
   }
 }
 
@@ -117,7 +117,7 @@ setInterval(async () => {
   if (lastDataTs > 0 && Date.now() - lastDataTs > DATA_TIMEOUT_MS) {
     console.warn("[bridge] Nincs adat 15s óta — live adatok törlése");
     lastDataTs = 0;
-    if (!OFFLINE) try { await clearLive(SESSION); } catch {}
+    if (!OFFLINE) try { await clearLive(SESSION); } catch(e) { console.error("[fb] clearLive hiba:", e.message); }
   }
 }, 5000);
 

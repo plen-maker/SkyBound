@@ -57,14 +57,18 @@ export function initFirebase(serviceAccountPath) {
 // ── REST API helpers ─────────────────────────────────────────────────
 async function rtdb(path, method, body) {
   const tok = await token();
-  if (!tok) throw new Error("nincs Firebase auth token");
+  if (!tok) throw new Error("nincs Firebase auth token — FIREBASE_REFRESH_TOKEN hiányzik .env-ből");
   const url = `${DB_URL}${path}?auth=${tok}`;
   const r = await fetch(url, {
     method,
     headers: { "Content-Type":"application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!r.ok) throw new Error(`RTDB ${method} ${path} → HTTP ${r.status}`);
+  if (!r.ok) {
+    let detail = "";
+    try { const d = await r.json(); detail = d?.error || ""; } catch {}
+    throw new Error(`RTDB ${method} ${path} → HTTP ${r.status}${detail ? ": " + detail : ""}`);
+  }
   return r.json();
 }
 

@@ -660,7 +660,7 @@ async fn bridge_start(app: tauri::AppHandle, state: tauri::State<'_, AppState>, 
 async fn bridge_read_log() -> String {
     let log = bridge_dir().join("bridge.log");
     fs::read_to_string(&log).unwrap_or_default()
-        .lines().rev().take(20).collect::<Vec<_>>()
+        .lines().rev().take(50).collect::<Vec<_>>()
         .into_iter().rev().collect::<Vec<_>>().join("\n")
 }
 
