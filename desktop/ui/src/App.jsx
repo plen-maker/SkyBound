@@ -2514,7 +2514,8 @@ function BridgeTab({ live, sessionCode }) {
       setLog(prev => [...prev, e.payload]);
     });
     try {
-      await invoke("bridge_install", { sessionCode: sessionCode || "" });
+      const refreshToken = auth.currentUser?.refreshToken || "";
+      await invoke("bridge_install", { sessionCode: sessionCode || "", refreshToken });
       setInstallDone(true);
     } catch(e) {
       setLog(prev => [...prev, `❌ Hiba: ${e}`]);

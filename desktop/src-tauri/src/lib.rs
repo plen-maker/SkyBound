@@ -487,7 +487,7 @@ async fn run_streamed(
 }
 
 #[tauri::command]
-async fn bridge_install(app: tauri::AppHandle, session_code: String) -> Result<(), String> {
+async fn bridge_install(app: tauri::AppHandle, session_code: String, refresh_token: Option<String>) -> Result<(), String> {
     if session_code.trim().is_empty() {
         return Err("Állítsd be a session kódot a Settings-ben, majd próbáld újra.".to_string());
     }
@@ -531,7 +531,20 @@ async fn bridge_install(app: tauri::AppHandle, session_code: String) -> Result<(
             } else { l.to_string() }
         }).collect::<Vec<_>>().join("\n") + "\n"
     } else { template };
-    fs::write(&env_path, content).map_err(|e| e.to_string())?;
+    // Add Firebase refresh token if provided
+    if let Some(rt) = refresh_token.filter(|s| !s.is_empty()) {
+        let mut c = fs::read_to_string(&env_path).unwrap_or_default();
+        if c.contains("FIREBASE_REFRESH_TOKEN=") {
+            let updated: Vec<String> = c.lines().map(|l| {
+                if l.starts_with("FIREBASE_REFRESH_TOKEN=") { format!("FIREBASE_REFRESH_TOKEN={rt}") }
+                else { l.to_string() }
+            }).collect();
+            c = updated.join("\n") + "\n";
+        } else {
+            c = format!("{}FIREBASE_REFRESH_TOKEN={rt}\n", c.trim_end_matches('\n').to_string() + "\n");
+        }
+        fs::write(&env_path, c).map_err(|e| e.to_string())?;
+    }
 
     emit("✓ Kész! Bridge telepítve.");
     Ok(())
