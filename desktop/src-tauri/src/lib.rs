@@ -802,9 +802,9 @@ fn start_http_server() {
 // ── App setup ─────────────────────────────────────────────────────
 
 pub fn run() {
-    start_http_server();
     tauri::Builder::default()
         .manage(AppState { bridge: Mutex::new(BridgeProc::new()), live_data: Mutex::new(None) })
+        .setup(|_app| { start_http_server(); Ok(()) })
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
         .invoke_handler(tauri::generate_handler![
