@@ -497,15 +497,16 @@ async fn bridge_install(app: tauri::AppHandle, session_code: String, refresh_tok
     let emit = |msg: &str| { app.emit("bridge:log", msg.to_string()).ok(); };
 
     // Clone or update repo
+    let git = find_git();
     if root.join(".git").exists() {
         emit("► git pull…");
-        run_streamed(&app, "git", &["pull", "--ff-only"], &root).await
-            .unwrap_or_else(|e| emit(&format!("git pull skip: {e}")));
+        run_streamed(&app, &git, &["pull", "--ff-only"], &root).await
+            .unwrap_or_else(|e| emit(&format!("git pull hiba: {e}")));
     } else {
         emit("► git clone…");
         let parent = root.parent().unwrap_or(std::path::Path::new("."));
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        run_streamed(&app, "git", &[
+        run_streamed(&app, &git, &[
             "clone", "https://github.com/plen-maker/SkyBound.git", "skybound"
         ], &parent.to_path_buf()).await?;
     }
@@ -548,6 +549,28 @@ async fn bridge_install(app: tauri::AppHandle, session_code: String, refresh_tok
 
     emit("✓ Kész! Bridge telepítve.");
     Ok(())
+}
+
+fn find_git() -> String {
+    #[cfg(windows)]
+    {
+        let candidates = [
+            "git.exe",
+            r"C:\Program Files\Git\cmd\git.exe",
+            r"C:\Program Files\Git\bin\git.exe",
+            r"C:\Program Files (x86)\Git\cmd\git.exe",
+            r"C:\Program Files (x86)\Git\bin\git.exe",
+        ];
+        for c in &candidates {
+            if PathBuf::from(c).exists() { return c.to_string(); }
+        }
+        // Check LOCALAPPDATA\Programs\Git
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            let p = format!(r"{local}\Programs\Git\cmd\git.exe");
+            if PathBuf::from(&p).exists() { return p; }
+        }
+    }
+    "git".to_string()
 }
 
 fn find_node() -> String {
