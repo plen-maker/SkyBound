@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { startSim } from "./sim.js";
 import { startFsuipc } from "./fsuipc_sim.js";
+import { startMock } from "./mock_sim.js";
 import { createEngine } from "./triggers.js";
 import { fetchOFP } from "../../shared/simbrief.js";
 import { initFirebase, writeLive, writeLanding, watchTriggers, pushToDevices, clearLive } from "./firebase.js";
@@ -15,6 +16,7 @@ const args     = process.argv.slice(2);
 let SIM_MODE   = process.env.SIM_MODE || "auto";
 if (args.includes("--fsuipc"))     SIM_MODE = "fsuipc7";
 if (args.includes("--simconnect")) SIM_MODE = "simconnect";
+if (args.includes("--mock"))       SIM_MODE = "mock";
 
 if (!SESSION) {
   console.error("Hiányzik: SKYBOUND_SESSION a .env-ben");
@@ -69,15 +71,15 @@ async function loadOFP() {
 
 let lastWrite = 0;
 let lastDataTs = 0;
-let prevOnGround = false;
+let prevOnGround = null;
 const DATA_TIMEOUT_MS = 15000;
 
 function handleTelemetry(telemetry) {
   const now = Date.now();
   lastDataTs = now;
 
-  // Touchdown detection: onGround false → true
-  if (!prevOnGround && telemetry.onGround) {
+  // Touchdown detection: onGround false → true (skip first tick)
+  if (prevOnGround === false && telemetry.onGround) {
     const landing = {
       fpm:          Math.round(telemetry.vsFpm),
       gs:           Math.round(telemetry.gsKt),
@@ -91,7 +93,7 @@ function handleTelemetry(telemetry) {
     if (!OFFLINE) writeLanding(SESSION, landing).catch(() => {});
     console.log(`[landing] Touchdown: ${landing.fpm} FPM @ ${landing.gs} kt GS, IAS ${landing.ias} kt`);
   }
-  prevOnGround = telemetry.onGround;
+  prevOnGround = telemetry.onGround ?? prevOnGround;
 
   if (now - lastWrite < 900) return;
   lastWrite = now;
@@ -124,20 +126,21 @@ async function main() {
   await loadOFP();
   setInterval(loadOFP, 5 * 60 * 1000);
 
-  if (SIM_MODE === "fsuipc7") {
+  if (SIM_MODE === "mock") {
+    console.log("[bridge] Mode: MOCK (LHBP→LOWW, 2 perc)");
+    startMock(handleTelemetry);
+  } else if (SIM_MODE === "fsuipc7") {
     console.log("[bridge] Mode: FSUIPC7");
     await startFsuipc(handleTelemetry);
   } else if (SIM_MODE === "simconnect") {
     console.log("[bridge] Mode: SimConnect");
     await startSim(handleTelemetry);
   } else {
-    console.log("[bridge] Mode: auto");
-    try {
-      await startFsuipc(handleTelemetry);
-    } catch(e) {
-      console.warn("[bridge] FSUIPC7 nem elérhető, SimConnect...");
-      await startSim(handleTelemetry);
-    }
+    console.log("[bridge] Mode: auto (SimConnect + opcionális FSUIPC7)");
+    // SimConnect is built into MSFS 2020/2024 — always start it
+    startSim(handleTelemetry);
+    // Try FSUIPC7 in parallel if the package is available (higher accuracy)
+    try { startFsuipc(handleTelemetry); } catch {}
   }
   console.log("[bridge] fut...");
 }

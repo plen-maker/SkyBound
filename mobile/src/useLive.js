@@ -8,6 +8,25 @@ const sessionListeners = new Set();
 export function subscribeSession(fn) { sessionListeners.add(fn); return () => sessionListeners.delete(fn); }
 export function notifySession(code) { sessionListeners.forEach(f => f(code)); }
 
+// Module-level desktop URL event bus
+const desktopListeners = new Set();
+export function subscribeDesktop(fn) { desktopListeners.add(fn); return () => desktopListeners.delete(fn); }
+export function notifyDesktop(url)   { desktopListeners.forEach(f => f(url)); }
+
+export function useDesktopUrl() {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    AsyncStorage.getItem('desktopUrl').then(v => setUrl(v || null));
+    return subscribeDesktop(setUrl);
+  }, []);
+  const save = (newUrl) => {
+    const v = newUrl?.trim() || null;
+    AsyncStorage.setItem('desktopUrl', v || '');
+    notifyDesktop(v);
+  };
+  return [url, save];
+}
+
 export function useLive() {
   const [live,        setLive]        = useState(null);
   const [rtdb,        setRtdb]        = useState(false);
