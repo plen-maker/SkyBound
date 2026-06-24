@@ -511,6 +511,15 @@ async fn bridge_install(app: tauri::AppHandle, session_code: String, refresh_tok
         ], &parent.to_path_buf()).await?;
     }
 
+    // Write bridge source files directly (bypasses git — embedded at compile time)
+    emit("► bridge forrás frissítése…");
+    let src_dir = bridge.join("src");
+    fs::create_dir_all(&src_dir).map_err(|e| e.to_string())?;
+    fs::write(src_dir.join("firebase.js"), include_str!("../../../bridge/src/firebase.js"))
+        .map_err(|e| format!("firebase.js írási hiba: {e}"))?;
+    fs::write(src_dir.join("index.js"), include_str!("../../../bridge/src/index.js"))
+        .map_err(|e| format!("index.js írási hiba: {e}"))?;
+
     // npm install
     emit("► npm install…");
     #[cfg(windows)]
